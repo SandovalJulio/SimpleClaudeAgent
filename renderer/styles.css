@@ -51,6 +51,8 @@ body {
   background: var(--bg);
   display: grid;
   grid-template-columns: 280px 1fr;
+  grid-template-rows: 100%;   /* una sola fila: los contenedores auxiliares (menú, avisos, configuración) no ocupan espacio */
+  grid-auto-rows: 0;
   overflow: hidden;
 }
 button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }

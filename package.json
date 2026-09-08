@@ -14,5 +14,8 @@
   "devDependencies": {
     "electron": "latest",
     "playwright-core": "^1.63.0"
-  }
+  },
+  "description": "Agente de escritorio sobre el Claude Agent SDK: skills, memoria, artifacts y tareas programadas.",
+  "license": "MIT",
+  "author": "Julio Sandoval"
 }
