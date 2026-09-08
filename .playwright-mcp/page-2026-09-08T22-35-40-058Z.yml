@@ -1,0 +1,56 @@
+- main [ref=e2]:
+  - generic [ref=e3]:
+    - heading "Demo de FilesPanel" [level=2] [ref=e4]
+    - generic [ref=e5]:
+      - generic "artifacts/informe.html" [ref=e6]:
+        - generic [aria-hidden] [ref=e7]: 🌐
+        - generic [ref=e8]: informe.html
+        - generic [ref=e9]:
+          - button "Abrir" [ref=e10] [cursor=pointer]
+          - button "Carpeta" [ref=e11] [cursor=pointer]
+          - button "Vista previa" [ref=e12] [cursor=pointer]
+      - generic "notas.md" [ref=e13]:
+        - generic [aria-hidden] [ref=e14]: 📝
+        - generic [ref=e16]:
+          - button "Abrir" [ref=e17] [cursor=pointer]
+          - button "Carpeta" [ref=e18] [cursor=pointer]
+          - button "Vista previa" [ref=e19] [cursor=pointer]
+      - generic "datos.json" [ref=e20]:
+        - generic [aria-hidden] [ref=e21]: 🧾
+        - generic [ref=e23]:
+          - button "Abrir" [ref=e24] [cursor=pointer]
+          - button "Carpeta" [ref=e25] [cursor=pointer]
+          - button "Vista previa" [ref=e26] [cursor=pointer]
+      - generic "tabla.csv" [ref=e27]:
+        - generic [aria-hidden] [ref=e28]: 📊
+        - generic [ref=e30]:
+          - button "Abrir" [ref=e31] [cursor=pointer]
+          - button "Carpeta" [ref=e32] [cursor=pointer]
+          - button "Vista previa" [ref=e33] [cursor=pointer]
+      - generic "salida.txt" [ref=e34]:
+        - generic [aria-hidden] [ref=e35]: 📄
+        - generic [ref=e37]:
+          - button "Abrir" [ref=e38] [cursor=pointer]
+          - button "Carpeta" [ref=e39] [cursor=pointer]
+          - button "Vista previa" [ref=e40] [cursor=pointer]
+      - generic "imagen.png" [ref=e41]:
+        - generic [aria-hidden] [ref=e42]: 🖼️
+        - generic [ref=e44]:
+          - button "Abrir" [ref=e45] [cursor=pointer]
+          - button "Carpeta" [ref=e46] [cursor=pointer]
+          - button "Vista previa" [ref=e47] [cursor=pointer]
+      - generic "script.py" [ref=e48]:
+        - generic [aria-hidden] [ref=e49]: 🐍
+        - generic [ref=e51]:
+          - button "Abrir" [ref=e52] [cursor=pointer]
+          - button "Carpeta" [ref=e53] [cursor=pointer]
+  - generic [ref=e54]:
+    - generic [ref=e55]:
+      - generic [aria-hidden] [ref=e56]: 🌐
+      - generic "artifacts/informe.html" [ref=e57]: informe.html
+      - generic [ref=e58]:
+        - button "Abrir" [ref=e59] [cursor=pointer]
+        - button "Carpeta" [ref=e60] [cursor=pointer]
+        - button "Recargar" [ref=e61] [cursor=pointer]
+        - button "Cerrar" [ref=e62] [cursor=pointer]: ×
+    - iframe [ref=e64]

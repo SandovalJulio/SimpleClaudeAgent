@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<title>Demo — FilesPanel</title>
+<link rel="stylesheet" href="../renderer/files.css" />
+<style>
+  :root {
+    --bg: #f4f4f5; --bg-card: #fff; --bg-hover: #e2e2e5; --bg-inline: #e7e7ea; --bg-code: #f0f0f2;
+    --border: #d6d6db; --text: #1c1c1f; --text-2: #55555c; --text-3: #86868e; --ink: #1c1c1f;
+    --accent: #2f6fdb; --accent-soft: #e8effb; --ok: #16a34a; --err: #dc2626;
+    --sans: "Segoe UI", system-ui, sans-serif; --mono: Consolas, ui-monospace, monospace;
+    --shadow: 0 1px 2px rgba(0,0,0,.04), 0 6px 20px rgba(0,0,0,.06);
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { font: 14.5px/1.55 var(--sans); color: var(--text); background: var(--bg); display: flex; }
+  main { display: flex; flex: 1 1 auto; min-width: 0; height: 100%; }
+  #chat { flex: 1 1 auto; min-width: 0; padding: 20px; overflow: auto; }
+  .md p { margin: 0 0 .8em; }
+  .md h1 { font-size: 1.5em; }
+  .md code { font-family: var(--mono); background: var(--bg-inline); padding: .1em .4em; border-radius: 5px; }
+</style>
+</head>
+<body>
+  <main>
+    <div id="chat">
+      <h2>Demo de FilesPanel</h2>
+      <div id="chips"></div>
+    </div>
+    <div id="panel-root"></div>
+  </main>
+
+  <script src="../node_modules/marked/lib/marked.umd.js"></script>
+  <script>
+    window.App = {
+      $: (id) => document.getElementById(id),
+      esc: (t) => String(t == null ? "" : t).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])),
+      relPath: (p) => String(p).replace(/^C:[\\/]trabajo[\\/]/i, ""),
+      baseName: (p) => String(p).split(/[\\/]/).filter(Boolean).pop(),
+    };
+    window.agente = {
+      openFile: (p) => { console.log("openFile", p); return Promise.resolve(); },
+      openPath: (p) => { console.log("openPath", p); return Promise.resolve(); },
+      readFile: (p) => {
+        const e = String(p).split(".").pop().toLowerCase();
+        if (e === "md") return Promise.resolve({ text: "# Informe\n\nTexto de **ejemplo** con `código` y una lista:\n\n- uno\n- dos\n", mime: "text/markdown", size: 80 });
+        if (e === "json") return Promise.resolve({ text: '{"a":1,"b":[1,2,3],"c":{"d":true}}', mime: "application/json", size: 34 });
+        if (e === "csv") return Promise.resolve({ text: "col1,col2\n1,2\n3,4\n", mime: "text/csv", size: 18 });
+        if (e === "txt") return Promise.resolve({ text: "Texto plano de ejemplo.\nSegunda línea.\n", mime: "text/plain", size: 40 });
+        return Promise.reject(new Error("Tipo no soportado en la demo"));
+      },
+    };
+  </script>
+  <script src="../renderer/files.js"></script>
+  <script>
+    FilesPanel.render(document.getElementById("chips"), [
+      "C:/trabajo/artifacts/informe.html",
+      "C:/trabajo/notas.md",
+      "C:/trabajo/datos.json",
+      "C:/trabajo/tabla.csv",
+      "C:/trabajo/salida.txt",
+      "C:/trabajo/imagen.png",
+      "C:/trabajo/notas.md",
+      "C:/trabajo/script.py",
+    ], "conv1");
+    console.log("isPreviewable html:", FilesPanel.isPreviewable("a.html"), "py:", FilesPanel.isPreviewable("a.py"));
+  </script>
+</body>
+</html>

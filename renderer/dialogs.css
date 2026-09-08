@@ -1,0 +1,157 @@
+/* dialogs.css — Tarjetas de diálogo del agente (permisos, preguntas, plan, elicitación).
+   Solo tokens existentes de styles.css. Todas las clases con prefijo dlg-. */
+
+.dlg-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent);
+  border-radius: 12px;
+  padding: 12px 14px 12px 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-family: var(--sans);
+  color: var(--text);
+}
+
+/* Cabecera */
+.dlg-head { display: flex; align-items: center; gap: 8px; }
+.dlg-ico {
+  width: 18px; height: 18px; flex: none;
+  display: grid; place-items: center;
+  color: var(--accent);
+}
+.dlg-ico svg { width: 15px; height: 15px; display: block; }
+.dlg-title { font-size: 13px; font-weight: 600; letter-spacing: -.01em; }
+.dlg-chip {
+  font-size: 10.5px; font-weight: 500; line-height: 1.6;
+  padding: 1px 7px; border-radius: 99px;
+  background: var(--accent-soft); color: var(--accent);
+  font-family: var(--mono);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px;
+}
+.dlg-x {
+  margin-left: auto; flex: none;
+  width: 22px; height: 22px; border-radius: 6px;
+  display: grid; place-items: center;
+  color: var(--text-3);
+  background: none; border: 0; cursor: pointer; padding: 0;
+}
+.dlg-x svg { width: 13px; height: 13px; }
+.dlg-x:hover { background: var(--bg-hover); color: var(--text); }
+
+/* Cuerpo */
+.dlg-body { font-size: 13.5px; line-height: 1.55; display: flex; flex-direction: column; gap: 10px; }
+.dlg-p { margin: 0; }
+.dlg-muted { color: var(--text-2); }
+.dlg-input { min-width: 0; }
+.dlg-path, .dlg-json {
+  font-family: var(--mono); font-size: 12.5px;
+  background: var(--bg-inline); color: var(--text);
+  padding: 2px 7px; border-radius: 6px;
+  display: inline-block; max-width: 100%;
+  overflow-wrap: anywhere;
+}
+.dlg-json { color: var(--text-2); }
+.dlg-pre {
+  margin: 0;
+  font-family: var(--mono); font-size: 12.5px; line-height: 1.5;
+  background: var(--bg-code); color: var(--text);
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px 10px;
+  overflow-x: auto; white-space: pre-wrap; overflow-wrap: anywhere;
+}
+
+/* Preguntas */
+.dlg-q { display: flex; flex-direction: column; gap: 8px; }
+.dlg-q + .dlg-q { border-top: 1px solid var(--border); padding-top: 12px; }
+.dlg-q-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.dlg-q-text { font-weight: 500; }
+.dlg-opts { display: flex; flex-direction: column; gap: 6px; }
+.dlg-opt {
+  display: flex; align-items: flex-start; gap: 9px;
+  text-align: left; width: 100%;
+  padding: 8px 10px; border-radius: 9px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  color: var(--text); font: inherit; cursor: pointer;
+}
+.dlg-opt:hover { background: var(--bg-hover); }
+.dlg-opt.on { border-color: var(--accent); background: var(--accent-soft); }
+.dlg-mark {
+  width: 14px; height: 14px; flex: none; margin-top: 3px;
+  border: 1px solid var(--border); border-radius: 50%;
+  background: var(--bg);
+}
+.dlg-opt.dlg-multi .dlg-mark { border-radius: 4px; }
+.dlg-opt.on .dlg-mark {
+  border-color: var(--accent);
+  background: var(--accent);
+  box-shadow: inset 0 0 0 2.5px var(--bg-card);
+}
+.dlg-opt.dlg-multi.on .dlg-mark { box-shadow: inset 0 0 0 2px var(--bg-card); }
+.dlg-opt-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dlg-opt-label { font-size: 13.5px; }
+.dlg-opt-desc { font-size: 12px; color: var(--text-2); line-height: 1.45; }
+.dlg-other { display: flex; align-items: center; gap: 8px; }
+.dlg-other-lbl { font-size: 12px; color: var(--text-3); flex: none; }
+
+/* Campos */
+.dlg-form { display: flex; flex-direction: column; gap: 10px; }
+.dlg-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.dlg-field.dlg-field-check { flex-direction: row; align-items: center; gap: 8px; }
+.dlg-lbl { font-size: 12px; color: var(--text-2); font-weight: 500; }
+.dlg-req { color: var(--err); font-weight: 600; }
+.dlg-hint { font-size: 11.5px; color: var(--text-3); line-height: 1.45; }
+.dlg-input-text, .dlg-sel, .dlg-ta {
+  width: 100%; min-width: 0;
+  font: inherit; font-size: 13px; color: var(--text);
+  background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+  padding: 7px 9px;
+}
+.dlg-ta { resize: vertical; line-height: 1.5; }
+.dlg-input-text::placeholder, .dlg-ta::placeholder { color: var(--text-3); }
+.dlg-input-text:focus, .dlg-sel:focus, .dlg-ta:focus {
+  outline: none; border-color: var(--accent);
+}
+.dlg-check { width: 15px; height: 15px; accent-color: var(--accent); margin: 0; flex: none; }
+.dlg-field.dlg-bad .dlg-input-text,
+.dlg-field.dlg-bad .dlg-sel,
+.dlg-field.dlg-bad .dlg-ta { border-color: var(--err); }
+
+/* Plan */
+.dlg-plan { font-size: 13.5px; line-height: 1.6; max-height: 340px; overflow: auto; }
+.dlg-plan > :first-child { margin-top: 0; }
+.dlg-plan > :last-child { margin-bottom: 0; }
+.dlg-plan h1, .dlg-plan h2, .dlg-plan h3 { font-size: 14px; font-weight: 600; margin: 12px 0 6px; }
+.dlg-plan p, .dlg-plan ul, .dlg-plan ol { margin: 6px 0; }
+.dlg-plan ul, .dlg-plan ol { padding-left: 20px; }
+.dlg-plan li { margin: 2px 0; }
+.dlg-plan code {
+  font-family: var(--mono); font-size: 12.5px;
+  background: var(--bg-inline); padding: 1px 5px; border-radius: 5px;
+}
+.dlg-plan pre {
+  background: var(--bg-code); border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px 10px; overflow-x: auto;
+}
+.dlg-plan pre code { background: none; padding: 0; }
+
+/* Acciones */
+.dlg-actions {
+  display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px;
+}
+.dlg-actions .btn { font-size: 13px; padding: 6px 12px; border-radius: 9px; }
+.dlg-actions .btn.dlg-danger { color: var(--err); }
+.dlg-actions .btn.dlg-danger:hover { background: var(--bg-hover); border-color: var(--err); }
+
+/* Resumen tras responder */
+.dlg-done {
+  display: flex; align-items: baseline; gap: 8px;
+  font-size: 12.5px; color: var(--text-2);
+  padding: 4px 2px;
+  font-family: var(--sans);
+}
+.dlg-done-mark { color: var(--text-3); flex: none; font-size: 11px; }
+.dlg-done-ok .dlg-done-mark { color: var(--ok); }
+.dlg-done-err .dlg-done-mark { color: var(--err); }
+.dlg-done-text { overflow-wrap: anywhere; }
