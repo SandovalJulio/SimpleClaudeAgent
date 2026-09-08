@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<title>Demo diálogos</title>
+<link rel="stylesheet" href="../renderer/dialogs.css" />
+<style>
+  /* Tokens y clases base copiados de index.html solo para esta demo. */
+  :root {
+    --bg: #f4f4f5; --bg-card: #ffffff; --bg-hover: #e2e2e5; --bg-code: #f0f0f2;
+    --bg-inline: #e7e7ea; --border: #d6d6db; --text: #1c1c1f; --text-2: #55555c;
+    --text-3: #86868e; --ink: #1c1c1f; --accent: #2f6fdb; --accent-soft: #e8effb;
+    --ok: #16a34a; --err: #dc2626;
+    --shadow: 0 1px 2px rgba(0,0,0,.04), 0 6px 20px rgba(0,0,0,.06);
+    --sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+    --mono: Consolas, "Cascadia Code", ui-monospace, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { font: 14.5px/1.55 var(--sans); color: var(--text); background: var(--bg); }
+  button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
+  button:disabled { cursor: default; opacity: .5; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 10px;
+    background: var(--bg-card); border: 1px solid var(--border); font-weight: 500;
+  }
+  .btn:hover { background: var(--bg-hover); }
+  .btn.ghost { background: transparent; border-color: transparent; color: var(--text-2); }
+  .btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; }
+  #conv-demo { height: 100%; overflow-y: auto; padding: 24px 0; }
+  .inner { max-width: 780px; margin: 0 auto; padding: 0 24px; display: flex; flex-direction: column; gap: 26px; }
+</style>
+</head>
+<body>
+  <div id="conv-demo"><div class="inner"></div></div>
+  <div id="thread-area" hidden></div>
+
+  <script src="../node_modules/marked/lib/marked.umd.js"></script>
+  <script>
+    // window.agente falso
+    window.agente = {
+      convReply: function (data) { console.log("convReply", JSON.stringify(data)); return Promise.resolve(); },
+      openExternal: function (url) { console.log("openExternal", url); return Promise.resolve(); }
+    };
+    window.App = {
+      $: function (id) { return document.getElementById(id); },
+      esc: function (s) {
+        return String(s == null ? "" : s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+      },
+      relPath: function (p) { return String(p || "").replace(/^C:[\\/]proyecto[\\/]/i, ""); },
+      toast: function (m, k) { console.log("toast", k || "", m); }
+    };
+  </script>
+  <script src="../renderer/dialogs.js"></script>
+  <script>
+    var ask = function (kind, payload, n) {
+      window.Dialogs.handle({ convId: "demo", reqId: "r" + n, kind: kind, payload: payload });
+    };
+
+    ask("permission", {
+      toolName: "Bash",
+      input: { command: "npm test -- --watch=false" },
+      summary: "Ejecutar las pruebas del proyecto.",
+      canAlways: true
+    }, 1);
+
+    ask("permission", {
+      toolName: "Write",
+      input: { file_path: "C:/proyecto/src/main/agent.js", content: "…" },
+      canAlways: false
+    }, 2);
+
+    ask("permission", {
+      toolName: "WebFetch",
+      input: { url: "https://ejemplo.com/a", prompt: "Resume la página <b>principal</b>" },
+      canAlways: true
+    }, 3);
+
+    ask("question", {
+      questions: [
+        {
+          question: "¿Qué gestor de paquetes usamos?",
+          header: "Entorno",
+          options: [
+            { label: "Opción A", description: "npm, el que ya está en el repo" },
+            { label: "Opción B", description: "pnpm, más rápido pero cambia el lockfile" }
+          ],
+          multiSelect: false
+        },
+        {
+          question: "¿Qué comprobaciones ejecuto al terminar?",
+          header: "Calidad",
+          options: [
+            { label: "Pruebas", description: "npm test" },
+            { label: "Lint" },
+            { label: "Tipos" }
+          ],
+          multiSelect: true
+        }
+      ]
+    }, 4);
+
+    ask("plan", {
+      plan: "## Plan\n\n1. Crear `renderer/dialogs.js`\n2. Crear `renderer/dialogs.css`\n3. Probar con la demo\n\n> Sin tocar otros archivos.\n\n```js\nwindow.Dialogs.handle(evento);\n```\n"
+    }, 5);
+
+    ask("plan", { plan: "" }, 6);
+
+    ask("elicitation", {
+      serverName: "github",
+      message: "Necesito algunos datos para crear la incidencia.",
+      mode: "form",
+      requestedSchema: {
+        type: "object",
+        properties: {
+          titulo: { type: "string", title: "Título", description: "Resumen corto" },
+          prioridad: { type: "string", title: "Prioridad", enum: ["baja", "media", "alta"] },
+          puntos: { type: "integer", title: "Puntos de historia", minimum: 1, maximum: 13, default: 3 },
+          urgente: { type: "boolean", title: "Marcar como urgente" }
+        },
+        required: ["titulo", "prioridad"]
+      }
+    }, 7);
+
+    ask("elicitation", {
+      serverName: "notion",
+      message: "Autoriza el acceso a tu espacio de trabajo.",
+      mode: "url",
+      url: "https://ejemplo.com/oauth/autorizar?state=abc123"
+    }, 8);
+
+    console.log("demo lista: " + document.querySelectorAll("#conv-demo .dlg-card").length + " tarjetas");
+  </script>
+</body>
+</html>

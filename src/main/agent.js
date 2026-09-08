@@ -214,7 +214,13 @@ async function applySettings() {
   }
 }
 async function sessions() {
-  const list = await listSessions({ dir: cfg.getFolder(), limit: 30 });
+  const dir = cfg.getFolder();
+  let list = await listSessions({ dir, limit: 30 });
+  if (!list.length) {
+    // Respaldo: rutas con nombre corto de Windows (JULIOC~1) no casan por `dir`; filtramos por cwd.
+    const norm = (p) => path.resolve(p).replace(/[\\/]+$/, "").toLowerCase();
+    list = (await listSessions({ limit: 300 })).filter((s) => s.cwd && norm(s.cwd) === norm(dir)).slice(0, 30);
+  }
   return list.map((s) => ({ sessionId: s.sessionId, summary: s.summary, lastModified: s.lastModified }));
 }
 
