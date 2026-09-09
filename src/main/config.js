@@ -103,7 +103,19 @@ const DEFAULTS = {
   name: "", folder: "", connections: {}, schedules: [],
   maxBudgetUsd: 0, maxTurns: 0, sandbox: false, web: true, notifications: true,
   plugins: [], dirs: [],
+  convMeta: {}, // sessionId -> { title?, pinned? } (nombre y fijado de conversaciones)
 };
+
+// Nombre personalizado y fijado por sesión del SDK. Se borra la entrada si queda vacía.
+function setConvMeta(sessionId, patch = {}) {
+  if (!sessionId || typeof sessionId !== "string") return config.convMeta;
+  const m = { ...(config.convMeta[sessionId] || {}) };
+  if ("title" in patch) { const t = String(patch.title || "").trim().slice(0, 80); if (t) m.title = t; else delete m.title; }
+  if ("pinned" in patch) { if (patch.pinned) m.pinned = true; else delete m.pinned; }
+  if (Object.keys(m).length) config.convMeta[sessionId] = m; else delete config.convMeta[sessionId];
+  save();
+  return config.convMeta;
+}
 let config = { ...DEFAULTS };
 let folder = null;
 const configPath = () => path.join(app.getPath("userData"), "config.json");
@@ -161,7 +173,7 @@ function setConfig(patch = {}) {
 
 module.exports = {
   MODELS, EFFORTS, PERMISSIONS, CONNECTIONS, mcpServerFor, connState, connValues, publicConfig,
-  loadApiKey, apiKeyStatus, setApiKey,
+  loadApiKey, apiKeyStatus, setApiKey, setConvMeta,
   settings, setSettings, setConfig, load, save,
   getConfig: () => config, getFolder: () => folder, setFolder,
 };

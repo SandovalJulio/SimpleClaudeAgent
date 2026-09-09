@@ -82,12 +82,18 @@
       b.innerHTML = `<span class="dot ${c.busy ? "busy" : ""}"></span><span class="t">${esc(c.title)}</span><span class="pin" title="${c.pinned ? "Desfijar" : "Fijar"}">📌</span><span class="x" title="Cerrar">×</span>`;
       b.onclick = () => activate(c.id);
       b.ondblclick = (e) => { e.preventDefault(); renameConv(c, b.querySelector(".t")); };
-      b.oncontextmenu = (e) => { e.preventDefault(); c.pinned = !c.pinned; renderConvList(); };
-      b.querySelector(".pin").onclick = (e) => { e.stopPropagation(); c.pinned = !c.pinned; renderConvList(); };
+      b.oncontextmenu = (e) => { e.preventDefault(); togglePin(c); };
+      b.querySelector(".pin").onclick = (e) => { e.stopPropagation(); togglePin(c); };
       b.querySelector(".x").onclick = (e) => { e.stopPropagation(); closeConv(c.id); };
       box.appendChild(b);
     }
   }
+  // Nombre y fijado se guardan en config.json por sessionId (main: setConvMeta) y se aplican al listar el historial.
+  function persistMeta(conv) {
+    if (!conv.sessionId) return; // aún sin sesión del SDK: se guarda al llegar conv:init
+    window.agente.convMeta({ sessionId: conv.sessionId, title: conv.renamed ? conv.title : "", pinned: !!conv.pinned }).catch(() => {});
+  }
+  function togglePin(conv) { conv.pinned = !conv.pinned; persistMeta(conv); renderConvList(); }
   // Renombrar en línea (el renderer de Electron no tiene prompt()): el elemento pasa a editable,
   // Enter o perder el foco guardan, Escape cancela.
   function renameConv(conv, el) {
@@ -101,7 +107,7 @@
       if (done) return; done = true; renaming = null;
       target.contentEditable = "false";
       const name = target.textContent.trim().slice(0, 80);
-      if (save && name && name !== original) { conv.title = name; conv.renamed = true; }
+      if (save && name && name !== original) { conv.title = name; conv.renamed = true; persistMeta(conv); }
       $("crumb-title").textContent = state.convs.get(state.activeConv)?.title || "Nueva conversación";
       renderConvList();
     };
@@ -155,8 +161,9 @@
       box.innerHTML = items.length ? "" : `<div class="empty">${q ? "Sin coincidencias." : "Sin conversaciones anteriores."}</div>`;
       for (const s of items) {
         const b = document.createElement("button"); b.className = "hist"; b.title = "Clic: continuar · Clic derecho: bifurcar (copia nueva)";
-        b.innerHTML = `<span class="t">${esc(s.summary || "Sin título")}</span><span class="d">${new Date(s.lastModified).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" })}</span>`;
-        b.onclick = () => createConv({ resume: s.sessionId }).then((c) => { if (!c) return; c.title = s.summary || c.title; c.sessionId = s.sessionId; activate(c.id); });
+        if (s.pinned) b.classList.add("pinned");
+        b.innerHTML = `<span class="t">${s.pinned ? "📌 " : ""}${esc(s.title || s.summary || "Sin título")}</span><span class="d">${new Date(s.lastModified).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" })}</span>`;
+        b.onclick = () => createConv({ resume: s.sessionId }).then((c) => { if (!c) return; c.title = s.title || s.summary || c.title; c.renamed = !!s.title; c.pinned = !!s.pinned; c.sessionId = s.sessionId; activate(c.id); renderConvList(); });
         b.oncontextmenu = (e) => { e.preventDefault(); createConv({ resume: s.sessionId, fork: true }).then((c) => { if (!c) return; c.title = "Copia: " + (s.summary || ""); activate(c.id); }); };
         box.appendChild(b);
       }
@@ -324,7 +331,7 @@
 
   // ---------- Eventos del agente ----------
   const withConv = (fn) => (d) => { const c = state.convs.get(d.convId); if (c) fn(c, d); };
-  window.agente.on("conv:init", withConv((c, d) => { c.sessionId = d.sessionId; }));
+  window.agente.on("conv:init", withConv((c, d) => { const first = !c.sessionId; c.sessionId = d.sessionId; if (first && (c.renamed || c.pinned)) persistMeta(c); }));
   window.agente.on("conv:busy", withConv((c, d) => { c.busy = d.busy; setStatusIfActive(c); }));
   window.agente.on("conv:user", withConv((c, d) => { c.lastUuid = d.uuid; addUser(c, d.text, d.files || [], d.uuid); startTurn(c, d.uuid); }));
   window.agente.on("conv:delta", withConv((c, d) => appendDelta(c, d.text)));

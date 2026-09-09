@@ -103,6 +103,13 @@ const ACT = (a) => `.thread.active [data-act="${a}"]`;
   check("renombrar conversación", (await page.textContent("#convs .conv:first-child .t")) === "Mi tarea", await page.textContent("#convs .conv:first-child .t"));
   await page.hover("#convs .conv:last-child"); await page.click("#convs .conv:last-child .x"); await sleep(400);
   check("cerrar conversación", (await page.$$("#convs .conv")).length === 1);
+  // Nombre y fijado persistidos por sessionId en config.json (las conversaciones sin turno aún no tienen sesión).
+  await page.evaluate(() => window.agente.convMeta({ sessionId: "sesion-prueba", title: "Nombre guardado", pinned: true }));
+  let meta = (await page.evaluate(async () => (await window.agente.getState()).config)).convMeta;
+  check("meta de conversación guardada", meta["sesion-prueba"]?.title === "Nombre guardado" && meta["sesion-prueba"]?.pinned === true, JSON.stringify(meta));
+  await page.evaluate(() => window.agente.convMeta({ sessionId: "sesion-prueba", title: "", pinned: false }));
+  meta = (await page.evaluate(async () => (await window.agente.getState()).config)).convMeta;
+  check("meta vacía se elimina", !("sesion-prueba" in meta));
   // Buscar en historial (sin sesiones aún: muestra "Sin coincidencias")
   await page.fill("#history-search", "zzzz"); await sleep(200);
   check("búsqueda en historial filtra", (await page.textContent("#history")).includes("Sin coincidencias"));
@@ -180,11 +187,18 @@ const ACT = (a) => `.thread.active [data-act="${a}"]`;
     // Historial: el SDK persiste las sesiones; las abiertas se ocultan, así que cerramos una y debe aparecer.
     const sessions = await page.evaluate(() => window.agente.listSessions());
     check("SDK lista sesiones de la carpeta", sessions.length >= 2, String(sessions.length));
-    await page.hover("#convs .conv:last-child"); await page.click("#convs .conv:last-child .x"); await sleep(1200);
+    // Renombrar y fijar la conversación activa (ya tiene sessionId): debe persistir y verse en el historial.
+    await page.click("#convs .conv.active", { button: "right" }); await sleep(200);
+    await page.dblclick("#convs .conv.pinned .t"); await sleep(200);
+    await page.keyboard.press("Control+A"); await page.keyboard.type("Sugerencia guardada"); await page.keyboard.press("Enter"); await sleep(400);
+    await page.hover("#convs .conv.pinned"); await page.click("#convs .conv.pinned .x"); await sleep(1200);
     check("historial muestra la sesión cerrada", (await page.$$("#history .hist")).length >= 1);
-    // Reabrir desde el historial crea una conversación recuperada.
+    const first = await page.textContent("#history .hist:first-child .t");
+    check("historial muestra nombre y fijado persistidos", first.includes("📌") && first.includes("Sugerencia guardada"), first);
+    // Reabrir desde el historial crea una conversación recuperada con el nombre guardado.
     await page.click("#history .hist"); await sleep(1500);
     check("reanudar sesión desde historial", (await page.$$("#convs .conv")).length === 2);
+    check("reanudada con nombre y fijado", (await page.textContent("#convs .conv.active .t")) === "Sugerencia guardada" && (await page.$eval("#convs .conv.active", (e) => e.classList.contains("pinned"))));
   }
 
   console.log(results.join("\n"));

@@ -328,7 +328,11 @@ async function sessions() {
     const norm = (p) => path.resolve(p).replace(/[\\/]+$/, "").toLowerCase();
     list = (await listSessions({ limit: 300 })).filter((s) => s.cwd && norm(s.cwd) === norm(dir)).slice(0, 30);
   }
-  return list.map((s) => ({ sessionId: s.sessionId, summary: s.summary, lastModified: s.lastModified }));
+  // Nombre personalizado y fijado guardados en config (fijadas primero, luego por fecha).
+  const meta = cfg.getConfig().convMeta || {};
+  return list
+    .map((s) => ({ sessionId: s.sessionId, summary: s.summary, lastModified: s.lastModified, title: meta[s.sessionId]?.title || null, pinned: !!meta[s.sessionId]?.pinned }))
+    .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
 }
 
 // Consulta de un solo turno, sin UI (tareas programadas).
