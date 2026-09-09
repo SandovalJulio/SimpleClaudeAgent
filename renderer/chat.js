@@ -172,7 +172,31 @@
   function updateSuggestChip(conv) {
     const ready = !!state.memoryInfo?.suggestReady;
     const s = conv.inner.querySelector('[data-act="suggest"]'), e = conv.inner.querySelector('[data-act="explore"]');
-    if (s && e) { s.hidden = !ready; e.hidden = ready; }
+    if (s && e && (s.hidden !== !ready || e.hidden !== ready)) {
+      s.hidden = !ready; e.hidden = ready;
+      conv.inner.querySelectorAll(".hero .chip.current").forEach((c) => c.classList.remove("current")); // vuelve a la primera tarjeta
+    }
+    initChips(conv);
+  }
+  // Tarjetas de inicio como carrusel: una visible a la vez, con puntos (data-dot) y flechas (data-nav).
+  function initChips(conv) {
+    const chips = conv.inner.querySelector(".hero .chips"); if (!chips) return;
+    let dots = chips.parentElement.querySelector(".dots");
+    if (!dots) { dots = document.createElement("div"); dots.className = "dots"; chips.after(dots); }
+    const visible = [...chips.querySelectorAll(".chip")].filter((c) => !c.hidden);
+    if (!visible.length) return;
+    let idx = Math.max(0, visible.findIndex((c) => c.classList.contains("current")));
+    const show = (i) => {
+      idx = (i + visible.length) % visible.length;
+      chips.querySelectorAll(".chip").forEach((c) => c.classList.toggle("current", c === visible[idx]));
+      dots.querySelectorAll("[data-dot]").forEach((d, k) => d.classList.toggle("on", k === idx));
+    };
+    dots.innerHTML = '<button class="arrow" data-nav="-1" title="Anterior">‹</button>' +
+      visible.map((c) => `<button class="dotb" data-dot="${esc(c.dataset.act)}" title="${esc(c.querySelector("b")?.textContent || "")}"></button>`).join("") +
+      '<button class="arrow" data-nav="1" title="Siguiente">›</button>';
+    dots.querySelectorAll("[data-dot]").forEach((d, k) => (d.onclick = () => show(k)));
+    dots.querySelectorAll("[data-nav]").forEach((b) => (b.onclick = () => show(idx + Number(b.dataset.nav))));
+    show(idx);
   }
   on("memory:changed", () => state.convs.forEach(updateSuggestChip));
 

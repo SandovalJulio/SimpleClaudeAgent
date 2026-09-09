@@ -33,7 +33,7 @@ module.exports = async ({ page, check, sleep, WS, ACT }) => {
 
   // 2) Sugerencia (usa memoria) en una conversación nueva.
   await page.click("#new-chat"); await sleep(600);
-  await page.click(ACT("suggest"));
+  await page.click('.thread.active .dots [data-dot="suggest"]'); await page.click(ACT("suggest"));
   const done = await waitDone(120);
   const md = await page.$eval(".thread.active .msg.assistant .md", (e) => e.innerText).catch(() => "");
   check("consulta de sugerencia completada", done, (await page.$eval(".thread.active .usage", (e) => e.innerText).catch(() => "")).replace(/\s+/g, " ").slice(0, 100));

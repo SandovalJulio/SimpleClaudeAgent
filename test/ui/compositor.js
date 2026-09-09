@@ -1,14 +1,18 @@
 // Área "compositor": tarjetas de inicio, menú "/", píldoras de modelo, razonamiento y permisos.
 module.exports = async ({ page, check, sleep, ACT }) => {
-  // Tarjetas de inicio
-  await page.click(ACT("create")); await sleep(300);
+  // Tarjetas de inicio: carrusel con puntos; se navega al punto (data-dot) antes de pulsar la tarjeta.
+  const DOT = (a) => `.thread.active .dots [data-dot="${a}"]`;
+  check("carrusel: una tarjeta visible y cinco puntos", (await page.$$eval(".thread.active .chips .chip", (els) => els.filter((e) => getComputedStyle(e).display !== "none").length)) === 1 && (await page.$$(".thread.active .dots [data-dot]")).length === 5);
+  await page.click(".thread.active .dots [data-nav=\"1\"]"); await sleep(150);
+  check("carrusel: flecha avanza", await page.$eval(".thread.active .chip.current", (e) => e.dataset.act === "create"));
+  await page.click(DOT("create")); await page.click(ACT("create")); await sleep(300);
   const sel = await page.$eval("#input", (e) => e.value.slice(e.selectionStart, e.selectionEnd));
   check("crear skill rellena plantilla", (await page.inputValue("#input")).startsWith("Crea una skill llamada") && sel === "NOMBRE", sel);
-  await page.click(ACT("improve")); await sleep(300);
+  await page.click(DOT("improve")); await page.click(ACT("improve")); await sleep(300);
   check("mejorar skill abre menú", await page.$eval("#menu", (e) => e.classList.contains("open")));
   await page.click("#menu [data-skill]"); await sleep(200);
   check("elegir skill en mejorar", (await page.inputValue("#input")).startsWith("Mejora la skill /demo-skill"));
-  await page.click(ACT("artifact")); await sleep(200);
+  await page.click(DOT("artifact")); await page.click(ACT("artifact")); await sleep(200);
   check("artifact rellena plantilla", (await page.inputValue("#input")).startsWith("Crea un artifact"));
 
   // Menú "/"
