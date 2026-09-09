@@ -245,7 +245,10 @@ async function pump(conv) {
       emit("conv:status", { convId, kind: "retry", text: `${why}${m.error_status ? ` (HTTP ${m.error_status})` : ""}; reintento ${m.attempt} de ${m.max_retries}…` });
     } else if (m.type === "system" && m.subtype === "status") {
       if (m.status === "compacting") emit("conv:status", { convId, kind: "compact", text: "Compactando la conversación…" });
-      if (m.compact_result === "failed") emit("conv:notice", { convId, text: "No se pudo compactar: " + (m.compact_error || "error desconocido"), level: "warning" });
+      if (m.compact_result === "failed") {
+        const why = /not enough messages/i.test(m.compact_error || "") ? "la conversación aún es demasiado corta." : (m.compact_error || "error desconocido");
+        emit("conv:notice", { convId, text: "No se pudo compactar: " + why, level: "warning" });
+      }
     } else if (m.type === "system" && m.subtype === "compact_boundary") {
       const pre = m.compact_metadata?.pre_tokens;
       emit("conv:notice", { convId, text: `Conversación compactada: el contexto anterior se resumió${pre ? ` (${pre.toLocaleString("es-MX")} tokens)` : ""}.` });
