@@ -12,7 +12,8 @@ líneas, se divide. Toda la UI y los comentarios están en español.
 ## Comandos
 
 ```bash
-npm start                    # arranca la app (no hay compilación; cerrar y relanzar para cambios en main/)
+npm start                    # arranca la app en Electron (cerrar y relanzar para cambios en main/)
+npm run web                  # la misma app sin Electron: servidor local + navegador (AGENTE_PORT, AGENTE_NO_OPEN)
 npm test                     # prueba de UI sobre el Electron real, sin gastar tokens (~46 comprobaciones, por áreas)
 UI_TEST_LIVE=1 npm test      # además el área live con Haiku: permiso, rewind, hooks, compactar, subagente (centavos)
 npm test -- conexiones live  # solo esas áreas (test/ui/<área>.js; arranque siempre corre)
@@ -97,6 +98,16 @@ salvo avisos del SDK (`conv:status`). `app.js` define `window.App` (estado, `$`,
 FilesPanel / SchedulesUI`. Cada conversación tiene su `.thread#conv-<id>` absoluto dentro de
 `#thread-area`; solo la `.active` se muestra. El panel de vista previa (`files.js`) vive en
 `#panel-root`; los archivos en `artifacts/` se abren solos.
+
+**Sin Electron** (`server.js`, `npm run web`): los canales viven en `src/main/ipc.js` y los registran
+los dos anfitriones; `main.js` resuelve lo nativo con `dialog`/`shell` y `server.js` con HTTP
+(`POST /api/<canal>`) + SSE (`/events`), sirviendo `renderer/` en 127.0.0.1 e inyectando en
+`index.html` los dos scripts que sustituyen al preload: `web-preload.js` (mismo `window.agente`, con
+`web: true`) y `picker.js` (selector de carpetas/archivos sobre el canal `fs:browse`, porque el
+navegador no da rutas del disco). En `config.js` Electron es opcional (`process.versions.electron`):
+sin él las rutas salen de `os.homedir()`/`APPDATA` y **no hay `safeStorage`**, así que las
+credenciales quedan en base64, no cifradas. Se pierden arrastrar y soltar con ruta absoluta
+(`getPathForFile`) y el diálogo de guardado (exportar descarga un Blob).
 
 **Configuración**: `src/main/config.js` guarda `config.json` en `userData` (carpeta, nombre,
 conexiones, límites, plugins, dirs, tareas programadas). Los ajustes del compositor (modelo,

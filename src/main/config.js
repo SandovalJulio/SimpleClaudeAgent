@@ -1,7 +1,24 @@
 // Configuración persistente, carpeta de trabajo y catálogos (modelos, permisos, conexiones).
-const { app, safeStorage } = require("electron");
 const path = require("path");
 const fs = require("fs");
+const os = require("os");
+
+// Electron es opcional: bajo Node puro (`npm run web`) `require("electron")` devuelve la ruta del
+// binario, no la API, asi que se decide por `process.versions.electron`. Sin el: rutas de sistema y
+// cifrado base64 (safeStorage usa DPAPI/Keychain y no tiene equivalente fuera de Electron).
+const el = process.versions.electron ? require("electron") : null;
+const safeStorage = el ? el.safeStorage : null;
+const userDataDir = () => {
+  if (el) return el.app.getPath("userData");
+  if (process.env.AGENTE_USER_DATA) return process.env.AGENTE_USER_DATA;
+  const base = process.platform === "win32" ? process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming")
+    : process.platform === "darwin" ? path.join(os.homedir(), "Library", "Application Support")
+    : process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config");
+  const dir = path.join(base, "agente-escritorio");
+  try { fs.mkdirSync(dir, { recursive: true }); } catch { /* ya existe */ }
+  return dir;
+};
+const documentsDir = () => (el ? el.app.getPath("documents") : path.join(os.homedir(), "Documents"));
 
 // Modelos del selector (precio USD por millón de tokens).
 const MODELS = [
@@ -54,13 +71,13 @@ function connValues(id) {
   return out;
 }
 function encrypt(text) {
-  try { if (safeStorage.isEncryptionAvailable()) return "enc:" + safeStorage.encryptString(text).toString("base64"); } catch { /* sin cifrado */ }
+  try { if (safeStorage && safeStorage.isEncryptionAvailable()) return "enc:" + safeStorage.encryptString(text).toString("base64"); } catch { /* sin cifrado */ }
   return "raw:" + Buffer.from(text, "utf8").toString("base64");
 }
 function decrypt(stored) {
   if (!stored) return "";
   try {
-    if (stored.startsWith("enc:")) return safeStorage.decryptString(Buffer.from(stored.slice(4), "base64"));
+    if (stored.startsWith("enc:")) return safeStorage ? safeStorage.decryptString(Buffer.from(stored.slice(4), "base64")) : "";
     if (stored.startsWith("raw:")) return Buffer.from(stored.slice(4), "base64").toString("utf8");
   } catch { /* clave de otra máquina */ }
   return "";
@@ -120,15 +137,15 @@ function setConvMeta(sessionId, patch = {}) {
 }
 let config = { ...DEFAULTS };
 let folder = null;
-const configPath = () => path.join(app.getPath("userData"), "config.json");
+const configPath = () => path.join(userDataDir(), "config.json");
 
 function load() {
   try { config = { ...DEFAULTS, ...JSON.parse(fs.readFileSync(configPath(), "utf8")) }; } catch { /* primera ejecución */ }
   if (config.folder && fs.existsSync(config.folder)) {
     folder = config.folder;
   } else {
-    folder = path.join(app.getPath("documents"), "Agente");
-    try { fs.mkdirSync(folder, { recursive: true }); } catch { folder = app.getPath("documents"); }
+    folder = path.join(documentsDir(), "Agente");
+    try { fs.mkdirSync(folder, { recursive: true }); } catch { folder = documentsDir(); }
   }
 }
 function save() {
@@ -177,5 +194,5 @@ module.exports = {
   MODELS, EFFORTS, PERMISSIONS, CONNECTIONS, mcpServerFor, connState, connValues, publicConfig,
   loadApiKey, apiKeyStatus, setApiKey, setConvMeta,
   settings, setSettings, setConfig, load, save,
-  getConfig: () => config, getFolder: () => folder, setFolder,
+  getConfig: () => config, getFolder: () => folder, setFolder, documentsDir,
 };

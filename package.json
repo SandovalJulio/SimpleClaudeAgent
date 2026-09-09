@@ -5,6 +5,7 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
+    "web": "node server.js",
     "test": "node test/ui.js",
     "dist": "electron-builder --win --publish never",
     "dist:mac": "electron-builder --mac --publish never",
