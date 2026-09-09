@@ -5,7 +5,7 @@
   marked.use({ gfm: true, breaks: true, renderer: { html: () => "" } });
 
   const EFFORT_LABEL = { low: "Bajo", medium: "Medio", high: "Alto" };
-  const TOOL_ICON = { Read: "📄", Write: "✍️", Edit: "✏️", Bash: "⌨️", Glob: "🔍", Grep: "🔎", Skill: "⚡", WebSearch: "🌐", WebFetch: "🌐", AskUserQuestion: "❓", ExitPlanMode: "📋", TodoWrite: "☑️" };
+  const TOOL_ICON = { Read: "📄", Write: "✍️", Edit: "✏️", Bash: "⌨️", Glob: "🔍", Grep: "🔎", Skill: "⚡", WebSearch: "🌐", WebFetch: "🌐", AskUserQuestion: "❓", ExitPlanMode: "📋", TodoWrite: "☑️", Agent: "🤖" };
 
   // ---------- Markdown ----------
   function renderMd(el, text) {
@@ -56,6 +56,13 @@
   function setStatus(busy) {
     $("status-text").textContent = busy ? "Trabajando…" : "Listo";
     $("status-dot").className = "dot" + (busy ? " busy" : "");
+  }
+  // Avisos del SDK en la barra de estado (límite de uso, reintentos de red, compactación). Se borran al cambiar de estado.
+  function statusNotice(conv, { kind, text }) {
+    if (conv.id !== state.activeConv) return;
+    $("status-text").textContent = text;
+    $("status-dot").className = "dot " + (kind === "rate" ? "warn" : kind === "retry" ? "warn busy" : "busy");
+    $("status-text").title = text;
   }
   function closeConv(convId) {
     const conv = state.convs.get(convId); if (!conv) return;
@@ -115,6 +122,26 @@
     target.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); finish(true); } if (e.key === "Escape") { finish(false); } };
   }
   $("crumb-title").ondblclick = () => { const c = active(); if (c) renameConv(c); };
+
+  // Menú ⋯ de la conversación activa: renombrar, fijar, compactar (comando /compact del SDK), cerrar.
+  $("conv-menu").onclick = (e) => {
+    const conv = active(); if (!conv) return;
+    const menu = $("menu");
+    if (menu.classList.contains("open") && window.App.menuAnchor === e.currentTarget) return window.App.closeMenu();
+    const item = (act, label, note, disabled) => `<button class="mi" data-act="${act}" ${disabled ? "disabled" : ""}><span class="ml"><b>${label}</b>${note ? `<span>${note}</span>` : ""}</span></button>`;
+    window.App.openMenu(e.currentTarget, "conv", `<div class="head">Conversación</div>` +
+      item("rename", "Renombrar", "Doble clic en el título también funciona") +
+      item("pin", conv.pinned ? "Desfijar" : "Fijar", "Las fijadas van primero en la lista y el historial") +
+      item("compact", "Compactar conversación", "Resume el contexto anterior para ahorrar tokens", conv.busy || !conv.sessionId) +
+      item("close", "Cerrar", ""));
+    menu.querySelectorAll("[data-act]").forEach((b) => (b.onclick = async () => {
+      window.App.closeMenu();
+      if (b.dataset.act === "rename") renameConv(conv);
+      if (b.dataset.act === "pin") togglePin(conv);
+      if (b.dataset.act === "close") closeConv(conv.id);
+      if (b.dataset.act === "compact") { try { await window.agente.convCompact(conv.id); } catch (err) { toast(err.message.replace(/^.*Error: /, ""), "err"); } }
+    }));
+  };
 
   // ---------- Exportar a Markdown ----------
   function toMarkdown(conv) {
@@ -218,18 +245,22 @@
     if (i.query) return i.query;
     if (i.url) return i.url;
     if (name === "Skill") return "/" + (i.skill || i.command || "");
+    if (name === "Agent") return (i.subagent_type ? i.subagent_type + ": " : "") + (i.description || "");
     return JSON.stringify(i).slice(0, 80);
   }
-  function addTool(conv, { id, name, input }) {
+  function addTool(conv, { id, name, input, parent, agent }) {
     const turn = turnOf(conv);
     if (!turn.activity) {
       const d = document.createElement("details"); d.className = "activity"; d.open = true;
       d.innerHTML = '<summary><span class="spinner"></span><span class="label">Trabajando…</span><svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg></summary><div class="steps"></div>';
       turn.body.appendChild(d); turn.activity = d; turn.textEl = null;
     }
-    const row = document.createElement("div"); row.className = "step";
+    // Pasos de un subagente (parent = id de la herramienta Agent que lo lanzó): sangrados y con su nombre.
+    const row = document.createElement("div"); row.className = "step" + (parent ? " sub" : "");
     const sum = toolSummary(name, input);
-    row.innerHTML = `<span class="ico">${TOOL_ICON[name] || "🔧"}</span><span class="name">${esc(name.replace(/^mcp__/, ""))}</span><span class="sum" title="${esc(sum)}">${esc(sum)}</span><span class="st"><span class="spinner"></span></span>`;
+    const who = parent ? `<span class="agent">↳ ${esc(agent || turn.agents?.get(parent) || "subagente")}</span>` : "";
+    row.innerHTML = `<span class="ico">${TOOL_ICON[name] || "🔧"}</span>${who}<span class="name">${esc(name.replace(/^mcp__/, ""))}</span><span class="sum" title="${esc(sum)}">${esc(sum)}</span><span class="st"><span class="spinner"></span></span>`;
+    if (name === "Agent") (turn.agents ||= new Map()).set(id, input?.subagent_type || "subagente");
     turn.activity.querySelector(".steps").appendChild(row);
     turn.steps.set(id, row);
     const n = turn.activity.querySelectorAll(".step").length;
@@ -248,6 +279,13 @@
     turn.progressText = text;
     if (turn.activity) turn.activity.querySelector(".label").textContent = text;
     $("status-text").textContent = conv.id === state.activeConv ? text.slice(0, 60) : $("status-text").textContent;
+  }
+  // Avisos del proceso principal dentro del hilo (p. ej. escritura bloqueada por un hook).
+  function notice(conv, { text, level }) {
+    const turn = turnOf(conv);
+    const e = document.createElement("div"); e.className = "notice" + (level === "warning" ? " warn" : ""); e.textContent = text;
+    turn.body.appendChild(e); turn.textEl = null; turn.activity = null;
+    scrollBottom(conv);
   }
   function suggestion(conv, text) {
     const turn = conv.turn || conv.lastTurn; if (!turn) return;
@@ -339,6 +377,8 @@
   window.agente.on("conv:tool-done", withConv((c, d) => toolDone(c, d)));
   window.agente.on("conv:progress", withConv((c, d) => progress(c, d.text)));
   window.agente.on("conv:suggestion", withConv((c, d) => suggestion(c, d.text)));
+  window.agente.on("conv:notice", withConv((c, d) => notice(c, d)));
+  window.agente.on("conv:status", withConv((c, d) => statusNotice(c, d)));
   window.agente.on("conv:result", withConv((c, d) => finishTurn(c, d)));
   window.agente.on("conv:mode", (d) => { state.settings.permission = d.permission; emit("settings:changed"); toast("Plan aprobado: el agente pasa a modo " + (state.permissions.find((p) => p.id === d.permission)?.label || d.permission)); });
   window.agente.on("conv:ask", (d) => { const c = state.convs.get(d.convId); if (c) { c.inner.querySelector(".hero")?.remove(); } window.Dialogs?.handle(d); if (c) scrollBottom(c, true); });

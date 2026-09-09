@@ -29,6 +29,7 @@ contextBridge.exposeInMainWorld("agente", {
   convNew: invoke("conv:new"),
   convSend: invoke("conv:send"),
   convStop: invoke("conv:stop"),
+  convCompact: invoke("conv:compact"),
   convClose: invoke("conv:close"),
   convRewind: invoke("conv:rewind"),
   convDiff: invoke("conv:diff"),

@@ -103,6 +103,8 @@ const DEFAULTS = {
   name: "", folder: "", connections: {}, schedules: [],
   maxBudgetUsd: 0, maxTurns: 0, sandbox: false, web: true, notifications: true,
   plugins: [], dirs: [],
+  agents: true, // subagentes "lector" y "redactor"
+  hooks: true,  // bloquear escrituras fuera de la carpeta y registrar cambios
   convMeta: {}, // sessionId -> { title?, pinned? } (nombre y fijado de conversaciones)
 };
 
@@ -165,7 +167,7 @@ function setConfig(patch = {}) {
     }
   }
   for (const k of ["maxBudgetUsd", "maxTurns"]) if (typeof patch[k] === "number" && patch[k] >= 0) config[k] = patch[k];
-  for (const k of ["sandbox", "web", "notifications"]) if (typeof patch[k] === "boolean") config[k] = patch[k];
+  for (const k of ["sandbox", "web", "notifications", "agents", "hooks"]) if (typeof patch[k] === "boolean") config[k] = patch[k];
   for (const k of ["plugins", "dirs"]) if (Array.isArray(patch[k])) config[k] = patch[k].filter((p) => typeof p === "string" && fs.existsSync(p));
   save();
   return config;

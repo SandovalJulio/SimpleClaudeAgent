@@ -8,6 +8,8 @@ const Diff = require("diff");
 const { query, listSessions } = require("@anthropic-ai/claude-agent-sdk");
 const cfg = require("./config");
 const mem = require("./memory");
+const agents = require("./agents");
+const { buildHooks } = require("./hooks");
 
 const convs = new Map();   // convId -> conv
 const pending = new Map(); // reqId -> resolve (diálogos esperando al usuario)
@@ -41,13 +43,17 @@ function buildOptions(conv, { resume, fork, oneShot } = {}) {
   const mcpServers = Object.fromEntries(active.map((c) => [c.id, cfg.mcpServerFor(c, cfg.connValues(c.id))]));
   const tools = ["Read", "Glob", "Grep", "Skill", "Write", "Edit", "Bash", "AskUserQuestion", "ExitPlanMode", "TodoWrite"];
   if (config.web) tools.push("WebSearch", "WebFetch");
+  if (config.agents) tools.push("Agent"); // herramienta que lanza los subagentes
   tools.push(...active.map((c) => `mcp__${c.id}`));
   // En "Preguntar" solo las herramientas de lectura van preaprobadas; el resto pasa por canUseTool.
   const allowedTools = permission === "default" ? tools.filter((t) => !WRITE_TOOLS.has(t) && t !== "Bash") : tools;
 
   const append = mem.SYSTEM_APPEND +
+    (config.agents ? agents.AGENTS_APPEND : "") +
     (config.name ? `\nEl usuario se llama ${config.name}; dirígete a él por su nombre cuando sea natural.` : "") +
     mem.profileSummary(profile);
+  // Hooks: bloquear escrituras fuera de la carpeta (aviso en el hilo) y registrar cambios en .claude/cambios.log.
+  const hooks = config.hooks ? buildHooks({ folder, dirs: config.dirs, onBlocked: (text) => emit("conv:notice", { convId: conv.id, text, level: "warning" }) }) : undefined;
 
   return {
     model, effort, cwd: folder, env: cleanEnv(),
@@ -62,6 +68,8 @@ function buildOptions(conv, { resume, fork, oneShot } = {}) {
     enableFileCheckpointing: true,
     promptSuggestions: !oneShot,
     agentProgressSummaries: true,
+    ...(config.agents ? { agents: agents.AGENTS } : {}),
+    ...(hooks ? { hooks } : {}),
     ...(config.maxBudgetUsd > 0 ? { maxBudgetUsd: config.maxBudgetUsd } : {}),
     ...(config.maxTurns > 0 ? { maxTurns: config.maxTurns } : {}),
     ...(config.sandbox ? { sandbox: { enabled: true, failIfUnavailable: false } } : {}),
@@ -111,6 +119,13 @@ async function canUseTool(conv, toolName, input, { suggestions } = {}) {
   if (!r?.allow) return deny(r?.message || "El usuario rechazó la acción.");
   return { behavior: "allow", updatedInput: input, ...(r.always && suggestions ? { updatedPermissions: suggestions } : {}) };
 }
+
+// Errores de la API en lenguaje llano (barra de estado durante los reintentos del CLI).
+const API_ERRORS = {
+  server_error: "Error del servidor de la API", overloaded: "API saturada", rate_limit: "Límite de tasa de la API",
+  authentication_failed: "Clave de API rechazada", billing_error: "Problema de facturación", invalid_request: "Petición no válida",
+  model_not_found: "Modelo no disponible", unknown: "Sin respuesta de la API (¿hay conexión?)",
+};
 
 // ---------- Clave de API ----------
 const AUTH_ERRORS = {
@@ -220,6 +235,24 @@ async function pump(conv) {
       emit("mcp:status", statusList());
     } else if (m.type === "system" && m.subtype === "task_progress") {
       emit("conv:progress", { convId, text: m.summary || m.description || "" });
+    } else if (m.type === "rate_limit_event") {
+      const i = m.rate_limit_info || {};
+      const when = i.resetsAt ? new Date(i.resetsAt * 1000).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit" }) : null;
+      if (i.status === "rejected") emit("conv:status", { convId, kind: "rate", text: "Límite de uso alcanzado" + (when ? `; se reanuda a las ${when}` : "") + "." });
+      else if (i.status === "allowed_warning") emit("conv:status", { convId, kind: "rate", text: `Cerca del límite de uso${i.utilization ? ` (${Math.round(i.utilization * 100)} %)` : ""}${when ? `; se reinicia a las ${when}` : ""}.` });
+    } else if (m.type === "system" && m.subtype === "api_retry") {
+      const why = API_ERRORS[m.error] || m.error || "error";
+      emit("conv:status", { convId, kind: "retry", text: `${why}${m.error_status ? ` (HTTP ${m.error_status})` : ""}; reintento ${m.attempt} de ${m.max_retries}…` });
+    } else if (m.type === "system" && m.subtype === "status") {
+      if (m.status === "compacting") emit("conv:status", { convId, kind: "compact", text: "Compactando la conversación…" });
+      if (m.compact_result === "failed") emit("conv:notice", { convId, text: "No se pudo compactar: " + (m.compact_error || "error desconocido"), level: "warning" });
+    } else if (m.type === "system" && m.subtype === "compact_boundary") {
+      const pre = m.compact_metadata?.pre_tokens;
+      emit("conv:notice", { convId, text: `Conversación compactada: el contexto anterior se resumió${pre ? ` (${pre.toLocaleString("es-MX")} tokens)` : ""}.` });
+    } else if (m.type === "system" && m.subtype === "task_started" && m.subagent_type) {
+      emit("conv:progress", { convId, text: `Subagente «${m.subagent_type}»: ${m.description || ""}` });
+    } else if (m.type === "system" && m.subtype === "task_notification") {
+      emit("conv:progress", { convId, text: m.status === "completed" ? `Subagente terminado: ${m.summary || ""}` : `Subagente ${m.status === "failed" ? "falló" : "detenido"}` });
     } else if (m.type === "stream_event") {
       const ev = m.event;
       if (ev.type === "content_block_delta" && ev.delta.type === "text_delta") emit("conv:delta", { convId, text: ev.delta.text });
@@ -237,7 +270,8 @@ async function pump(conv) {
             if (!(abs in conv.turn.before)) conv.turn.before[abs] = readText(abs);
           }
         }
-        emit("conv:tool", { convId, id: block.id, name: block.name, input: block.input });
+        // parent_tool_use_id no nulo = el paso lo ejecutó un subagente lanzado por esa herramienta Agent.
+        emit("conv:tool", { convId, id: block.id, name: block.name, input: block.input, parent: m.parent_tool_use_id || null, agent: m.subagent_type || null });
       }
     } else if (m.type === "user") {
       const content = Array.isArray(m.message?.content) ? m.message.content : [];
@@ -306,6 +340,18 @@ async function status() {
 }
 
 async function stop(convId) { const c = convs.get(convId); if (c?.busy) await c.q.interrupt(); }
+// Compactar: el CLI procesa "/compact" como comando; resume el contexto y emite compact_boundary.
+function compact(convId) {
+  const conv = convs.get(convId);
+  if (!conv) throw new Error("La conversación ya no existe.");
+  if (conv.busy) throw new Error("Espera a que termine la respuesta.");
+  if (!conv.sessionId) throw new Error("Aún no hay nada que compactar.");
+  conv.busy = true; conv.turn = null;
+  emit("conv:busy", { convId, busy: true });
+  emit("conv:status", { convId, kind: "compact", text: "Compactando la conversación…" });
+  conv.push({ type: "user", uuid: crypto.randomUUID(), session_id: conv.sessionId, parent_tool_use_id: null, message: { role: "user", content: "/compact" } });
+  return true;
+}
 function close(convId) { convs.get(convId)?.close("closed"); }
 function closeAll() { for (const c of [...convs.values()]) c.close("folder-changed"); }
 async function rewind({ convId, uuid, dryRun }) {
@@ -356,4 +402,4 @@ async function runOnce(prompt, { schema, signal } = {}) {
   return out;
 }
 
-module.exports = { init, create, send, stop, close, closeAll, rewind, reply, applySettings, sessions, runOnce, diff, status, validateApiKey, count: () => convs.size };
+module.exports = { init, create, send, stop, compact, close, closeAll, rewind, reply, applySettings, sessions, runOnce, diff, status, validateApiKey, count: () => convs.size };

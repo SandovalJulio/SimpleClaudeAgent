@@ -41,6 +41,8 @@ app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
   cfg.load();
   cfg.loadApiKey(); // antes de crear cualquier conversación: el SDK la toma de process.env
+  // Skills de ejemplo en la carpeta por defecto, solo la primera vez (no en las pruebas: tocarían Documentos\Agente).
+  if (!cfg.getConfig().skillsSeeded && !process.env.AGENTE_USER_DATA) { mem.seedExampleSkills(cfg.getFolder()); cfg.getConfig().skillsSeeded = true; cfg.save(); }
   agent.init({ emit, notify });
   scheduler.start({ getConfig: cfg.getConfig, saveConfig: cfg.save, runOnce: agent.runOnce, notify: (t, b) => Notification.isSupported() && new Notification({ title: t, body: b }).show(), emit, getFolder: cfg.getFolder });
   createWindow();
@@ -104,6 +106,7 @@ h("memory:write", (t) => mem.writeMemoryFile(cfg.getFolder(), t));
 h("conv:new", (o) => agent.create(o || {}));
 h("conv:send", (o) => agent.send(o));
 h("conv:stop", (id) => agent.stop(id));
+h("conv:compact", (id) => agent.compact(id));
 h("conv:close", (id) => agent.close(id));
 h("conv:rewind", (o) => agent.rewind(o));
 h("conv:diff", (o) => agent.diff(o));

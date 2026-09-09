@@ -46,6 +46,8 @@
           <h3>Herramientas</h3>
           <div class="row"><div class="lbl"><b>Búsqueda web</b><span>Herramientas WebSearch y WebFetch del SDK.</span></div><button class="switch" data-cfg="web"></button></div>
           <div class="row"><div class="lbl"><b>Sandbox para comandos</b><span>Aísla los comandos Bash del resto del sistema. Si el sistema no lo soporta, se ejecutan sin aislar.</span></div><button class="switch" data-cfg="sandbox"></button></div>
+          <div class="row"><div class="lbl"><b>Subagentes</b><span>«lector» (Haiku, solo lectura: explora y resume) y «redactor» (modelo principal: escribe documentos largos). El agente delega cuando conviene; la línea de actividad marca sus pasos.</span></div><button class="switch" data-cfg="agents"></button></div>
+          <div class="row"><div class="lbl"><b>Protección y registro de escrituras</b><span>Bloquea escrituras fuera de la carpeta de trabajo y de los directorios adicionales (con aviso en el hilo) y anota cada archivo modificado en <code>.claude/cambios.log</code>.</span></div><button class="switch" data-cfg="hooks"></button></div>
           <div class="row"><div class="lbl"><b>Directorios adicionales</b><span>Otras carpetas a las que el agente puede acceder además de la de trabajo.</span><div id="cfg-dirs" class="paths"></div></div><button id="add-dir" class="btn">Añadir</button></div>
           <div class="row"><div class="lbl"><b>Plugins</b><span>Carpetas de plugins locales de Claude Code (skills, comandos y agentes de terceros).</span><div id="cfg-plugins" class="paths"></div></div><button id="add-plugin" class="btn">Añadir</button></div>
         </div>

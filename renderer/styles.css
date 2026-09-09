@@ -390,3 +390,12 @@ body.dragging .composer { border-color: var(--accent); border-style: dashed; }
 .welcome-status { min-height: 18px; font-size: 12.5px; color: var(--text-2); }
 .cred .credrow .btn { flex: none; }
 .hist.pinned .t { color: var(--text); font-weight: 500; }
+/* Avisos en el hilo (hooks) y pasos de subagentes en la línea de actividad */
+.notice { background: var(--bg-inline); color: var(--text-2); padding: 8px 12px; border-radius: 10px; font-size: 12.5px; border: 1px solid var(--border); }
+.notice.warn { background: #fff4e0; border-color: #f2d7a6; color: #8a5a00; }
+.dark .notice.warn { background: #3a2f1a; border-color: #5a4a26; color: #f0c674; }
+.step.sub { padding-left: 30px; background: var(--bg-code); }
+.step .agent { font-size: 11px; color: var(--accent); font-weight: 600; flex: none; }
+.dot.warn { background: #d97706; }
+#status-text { max-width: 420px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.menu .mi:disabled { opacity: .5; cursor: default; }

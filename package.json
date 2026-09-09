@@ -41,6 +41,7 @@
       "!test/**",
       "!docs/**",
       "!build/**",
+      "build/skills-ejemplo/**",
       "!.env"
     ],
     "directories": {

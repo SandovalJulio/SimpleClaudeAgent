@@ -53,6 +53,20 @@ function listSkills(folder) {
   ];
 }
 
+// Skills de ejemplo empaquetadas (build/skills-ejemplo/<nombre>/SKILL.md): se copian a la carpeta de
+// trabajo por defecto solo la primera vez (main.js guarda `skillsSeeded` en config). No sobrescribe.
+const EXAMPLES_DIR = path.join(__dirname, "..", "..", "build", "skills-ejemplo");
+function seedExampleSkills(folder, from = EXAMPLES_DIR) {
+  const copied = [];
+  if (!folder || !fs.existsSync(from)) return copied;
+  for (const name of fs.readdirSync(from)) {
+    const src = path.join(from, name, "SKILL.md"), dst = path.join(folder, ".claude", "skills", name, "SKILL.md");
+    if (!fs.existsSync(src) || fs.existsSync(dst)) continue;
+    try { fs.mkdirSync(path.dirname(dst), { recursive: true }); fs.copyFileSync(src, dst); copied.push(name); } catch { /* carpeta de solo lectura */ }
+  }
+  return copied;
+}
+
 // Viñetas bajo "## <titulo>" de un markdown.
 function sectionBullets(text, title) {
   const re = new RegExp(`^##\\s+${title}\\s*$([\\s\\S]*?)(?=^##\\s|(?![\\s\\S]))`, "m");
@@ -104,4 +118,4 @@ function writeMemoryFile(folder, text) {
   return true;
 }
 
-module.exports = { SYSTEM_APPEND, listSkills, listMemory, readMemoryFile, writeMemoryFile, loadProfile, saveProfile, noteExt, profileSummary, sectionBullets };
+module.exports = { SYSTEM_APPEND, listSkills, seedExampleSkills, listMemory, readMemoryFile, writeMemoryFile, loadProfile, saveProfile, noteExt, profileSummary, sectionBullets };

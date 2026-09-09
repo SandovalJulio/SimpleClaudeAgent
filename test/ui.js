@@ -110,6 +110,13 @@ const ACT = (a) => `.thread.active [data-act="${a}"]`;
   await page.evaluate(() => window.agente.convMeta({ sessionId: "sesion-prueba", title: "", pinned: false }));
   meta = (await page.evaluate(async () => (await window.agente.getState()).config)).convMeta;
   check("meta vacía se elimina", !("sesion-prueba" in meta));
+  // Menú ⋯ de la conversación: cuatro acciones; compactar deshabilitado sin sesión del SDK.
+  await page.click("#conv-menu"); await sleep(250);
+  check("menú de conversación", (await page.$$("#menu [data-act]")).length === 4 && (await page.$eval('#menu [data-act="compact"]', (e) => e.disabled)));
+  const wasPinned = await page.$eval("#convs .conv", (e) => e.classList.contains("pinned"));
+  await page.click('#menu [data-act="pin"]'); await sleep(200);
+  check("fijar/desfijar desde el menú", (await page.$eval("#convs .conv", (e) => e.classList.contains("pinned"))) === !wasPinned);
+  await page.click("#conv-menu"); await sleep(200); await page.click('#menu [data-act="pin"]'); await sleep(200);
   // Buscar en historial (sin sesiones aún: muestra "Sin coincidencias")
   await page.fill("#history-search", "zzzz"); await sleep(200);
   check("búsqueda en historial filtra", (await page.textContent("#history")).includes("Sin coincidencias"));
@@ -133,6 +140,10 @@ const ACT = (a) => `.thread.active [data-act="${a}"]`;
   check("conexión con token se activa", await (await page.$$("#cfg-connections .row"))[3].$eval(".switch", (e) => e.classList.contains("on")));
   await (await page.$$("#cfg-connections .row"))[3].$eval(".switch", (e) => e.click()); await sleep(300);
   check("tareas programadas montadas", (await page.$eval("#cfg-schedules", (e) => e.children.length)) > 0);
+  check("interruptores de subagentes y hooks activos por defecto", (await page.$$('[data-cfg="agents"].on, [data-cfg="hooks"].on')).length === 2);
+  await page.click('[data-cfg="agents"]'); await sleep(300);
+  check("desactivar subagentes se guarda", (await page.evaluate(async () => (await window.agente.getState()).config)).agents === false);
+  await page.click('[data-cfg="agents"]'); await sleep(200);
   await page.fill("#cfg-name", "Julio"); await page.dispatchEvent("#cfg-name", "change"); await sleep(200);
   await page.fill("#cfg-budget", "2.5"); await page.dispatchEvent("#cfg-budget", "change"); await sleep(200);
   await page.click('[data-cfg="web"]'); await sleep(300);
@@ -164,6 +175,8 @@ const ACT = (a) => `.thread.active [data-act="${a}"]`;
     for (let i = 0; i < 90 && !done; i++) { await sleep(1000); done = (await page.$$(".thread.active .usage")).length > 0; }
     check("turno con permiso completado", done);
     check("archivo creado en disco", fs.existsSync(path.join(WS, "hola.txt")));
+    const changeLog = fs.existsSync(path.join(WS, ".claude", "cambios.log")) ? fs.readFileSync(path.join(WS, ".claude", "cambios.log"), "utf8") : "";
+    check("hook registra el cambio en cambios.log", /\tWrite\thola\.txt/.test(changeLog), changeLog.trim().split("\n").pop());
     check("chip de archivo producido", (await page.$$(".thread.active .fp-chip")).length >= 1);
     check("botón revertir presente", (await page.$$(".thread.active .turn-actions .link")).length === 2);
     // Ver cambios: abre el panel con la diferencia del archivo nuevo.
@@ -184,6 +197,11 @@ const ACT = (a) => `.thread.active [data-act="${a}"]`;
     const md = await page.$eval(".thread.active .msg.assistant .md", (e) => e.innerText).catch(() => "");
     check("consulta de sugerencia completada", done, (await page.$eval(".thread.active .usage", (e) => e.innerText).catch(() => "")).replace(/\s+/g, " ").slice(0, 100));
     check("respuesta con contenido", md.length > 40, md.slice(0, 80).replace(/\n/g, " "));
+    // Compactar conversación (comando /compact del SDK): aviso de compactación en el hilo y vuelve a "Listo".
+    await page.click("#conv-menu"); await sleep(250); await page.click('#menu [data-act="compact"]');
+    let compacted = false;
+    for (let i = 0; i < 90 && !compacted; i++) { await sleep(1000); compacted = (await page.$$(".thread.active .notice")).length > 0 && !(await page.$eval("#send", (e) => e.classList.contains("stop"))); }
+    check("compactar conversación", compacted && (await page.textContent(".thread.active .notice").catch(() => "")).includes("compactada"), (await page.textContent(".thread.active .notice").catch(() => "sin aviso")).slice(0, 90));
     // Historial: el SDK persiste las sesiones; las abiertas se ocultan, así que cerramos una y debe aparecer.
     const sessions = await page.evaluate(() => window.agente.listSessions());
     check("SDK lista sesiones de la carpeta", sessions.length >= 2, String(sessions.length));
@@ -199,6 +217,28 @@ const ACT = (a) => `.thread.active [data-act="${a}"]`;
     await page.click("#history .hist"); await sleep(1500);
     check("reanudar sesión desde historial", (await page.$$("#convs .conv")).length === 2);
     check("reanudada con nombre y fijado", (await page.textContent("#convs .conv.active .t")) === "Sugerencia guardada" && (await page.$eval("#convs .conv.active", (e) => e.classList.contains("pinned"))));
+
+    // 3) Hook de bloqueo: una escritura fuera de la carpeta se deniega y deja aviso en el hilo.
+    const outside = path.join(os.tmpdir(), "agente-fuera-" + Date.now() + ".txt");
+    await page.click("#new-chat"); await sleep(600);
+    await page.fill("#input", `Usa la herramienta Write para crear el archivo ${outside} con el texto "prueba". Si la herramienta lo rechaza, no intentes otra forma: di en una frase que fue bloqueado.`);
+    await page.keyboard.press("Enter");
+    done = false;
+    for (let i = 0; i < 90 && !done; i++) { await sleep(1000); done = (await page.$$(".thread.active .usage")).length > 0; }
+    check("turno de escritura externa completado", done);
+    check("hook bloquea la escritura fuera de la carpeta", !fs.existsSync(outside) && (await page.$$(".thread.active .notice.warn")).length >= 1, (await page.textContent(".thread.active .notice.warn").catch(() => "sin aviso")).slice(0, 90));
+
+    // 4) Subagente "lector": sus pasos aparecen sangrados en la línea de actividad.
+    await page.click("#new-chat"); await sleep(600);
+    await page.fill("#input", "Delega en el subagente lector (herramienta Agent, subagent_type lector) que liste los archivos de esta carpeta y espera su resultado. Después responde en una sola frase.");
+    await page.keyboard.press("Enter");
+    done = false;
+    for (let i = 0; i < 150 && !done; i++) { await sleep(1000); done = (await page.$$(".thread.active .usage")).length > 0; }
+    check("turno con subagente completado", done);
+    // El subagente corre en segundo plano: sus pasos pueden llegar justo después del resultado del turno.
+    let agentSteps = [];
+    for (let i = 0; i < 30 && !agentSteps.length; i++) { agentSteps = await page.$$(".thread.active .step.sub"); if (!agentSteps.length) await sleep(1000); }
+    check("pasos del subagente marcados en la actividad", agentSteps.length >= 1, `${agentSteps.length} pasos sub; agente: ${await page.textContent(".thread.active .step.sub .agent").catch(() => "-")}`);
   }
 
   console.log(results.join("\n"));
