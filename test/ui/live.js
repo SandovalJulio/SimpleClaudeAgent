@@ -31,7 +31,11 @@ module.exports = async ({ page, check, sleep, WS, ACT }) => {
   check("revertir elimina el archivo creado", !fs.existsSync(path.join(WS, "hola.txt")));
   await page.click("#perm-pill"); await sleep(200); await page.click('#menu [data-perm="acceptEdits"]'); await sleep(300);
 
-  // 2) Sugerencia (usa memoria) en una conversación nueva.
+  // 2) Sugerencia (usa memoria) en una conversación nueva. Con cinco memorias aparece la tarjeta (el área
+  //    de configuración las añade, pero "live" debe poder correr sola).
+  const memFile = path.join(WS, "CLAUDE.md");
+  if (!/usa tablas/.test(fs.readFileSync(memFile, "utf8"))) fs.appendFileSync(memFile, "- usa tablas\n- formato breve\n");
+  await page.evaluate(() => window.App.refreshSide()); await sleep(500);
   await page.click("#new-chat"); await sleep(600);
   await page.click('.thread.active .dots [data-dot="suggest"]'); await page.click(ACT("suggest"));
   const done = await waitDone(120);
@@ -52,14 +56,15 @@ module.exports = async ({ page, check, sleep, WS, ACT }) => {
   await page.click("#convs .conv.active", { button: "right" }); await sleep(200);
   await page.dblclick("#convs .conv.pinned .t"); await sleep(200);
   await page.keyboard.press("Control+A"); await page.keyboard.type("Sugerencia guardada"); await page.keyboard.press("Enter"); await sleep(400);
-  await page.hover("#convs .conv.pinned"); await page.click("#convs .conv.pinned .x"); await sleep(1200);
-  check("historial muestra la sesión cerrada", (await page.$$("#history .hist")).length >= 1);
-  const first = await page.textContent("#history .hist:first-child .t");
-  check("historial muestra nombre y fijado persistidos", first.includes("📌") && first.includes("Sugerencia guardada"), first);
-  // Reabrir desde el historial crea una conversación recuperada con el nombre guardado.
-  await page.click("#history .hist"); await sleep(1500);
-  check("reanudar sesión desde historial", (await page.$$("#convs .conv")).length === 2);
+  await page.hover("#convs .conv.pinned"); await page.click("#convs .conv.pinned.open .x"); await sleep(1200);
+  check("la sesión cerrada sigue en la lista como anterior", (await page.$$("#convs .conv.hist")).length >= 1);
+  const first = await page.textContent("#convs .conv:first-child .t");
+  check("lista muestra nombre y fijado persistidos", (await page.$eval("#convs .conv:first-child", (e) => e.classList.contains("hist") && e.classList.contains("pinned"))) && first.includes("Sugerencia guardada"), first);
+  // Reabrir desde la lista reanuda la sesión y repinta la transcripción anterior.
+  await page.click("#convs .conv.hist.pinned"); await sleep(2500);
+  check("reanudar sesión desde la lista", (await page.$$("#convs .conv.open")).length === 2 && (await page.$$("#convs .conv.hist.pinned")).length === 0);
   check("reanudada con nombre y fijado", (await page.textContent("#convs .conv.active .t")) === "Sugerencia guardada" && (await page.$eval("#convs .conv.active", (e) => e.classList.contains("pinned"))));
+  check("transcripción repintada al reanudar", (await page.$$(".thread.active .msg.user")).length >= 1 && (await page.$$(".thread.active .msg.assistant .md")).length >= 1, `${(await page.$$(".thread.active .msg")).length} mensajes`);
 
   // 3) Hook de bloqueo: una escritura fuera de la carpeta se deniega y deja aviso en el hilo.
   const outside = path.join(os.tmpdir(), "agente-fuera-" + Date.now() + ".txt");

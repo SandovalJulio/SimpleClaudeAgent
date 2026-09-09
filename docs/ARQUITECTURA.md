@@ -9,7 +9,8 @@ main.js                  Entrada: ventana, atajos, notificaciones, registro de I
 preload.js               Expone window.agente (invoke + on) al renderer.
 src/main/config.js       Configuración persistente, clave de API cifrada, carpeta, catálogos, convMeta (nombre/fijado por sesión).
 src/main/memory.js       Skills (.claude/skills y las de ejemplo), memoria (CLAUDE.md), perfil (.claude/perfil.json).
-src/main/agent.js        Conversaciones: una query en modo streaming-input por conversación; eventos; permisos; rewind; compactar; sesiones.
+src/main/agent.js        Conversaciones: una query en modo streaming-input por conversación; eventos; permisos; rewind; compactar.
+src/main/sessions.js     Historial de sesiones (listSessions + convMeta) y transcripción simplificada (getSessionMessages).
 src/main/agents.js       Subagentes por defecto (lector, redactor) e instrucciones de delegación (AGENTS_APPEND).
 src/main/hooks.js        Hooks del SDK: bloquear escrituras fuera de la carpeta y registrar cambios en .claude/cambios.log.
 src/main/scheduler.js    Tareas programadas (ejecuta consultas de un solo turno).
@@ -17,7 +18,8 @@ renderer/index.html      Marcado base con contenedores de montaje.
 renderer/styles.css      Estilos base (tokens, layout, chat, compositor, configuración).
 renderer/app.js          Estado global, utilidades ($, esc, menús flotantes, tema), arranque.
 renderer/welcome.js      Pantalla de bienvenida: pide y valida la clave de API cuando no hay ninguna (window.Welcome).
-renderer/chat.js         Conversaciones en paralelo (pestañas), mensajes, actividad, costo, sugerencias, historial.
+renderer/chat.js         Conversaciones en paralelo, mensajes, actividad, costo, sugerencias, menú ⋯.
+renderer/convlist.js     Lista única de conversaciones (abiertas + anteriores), renombrar/fijar, reanudar con transcripción.
 renderer/composer.js     Compositor: adjuntos, arrastrar y soltar, dictado, menú "/", píldoras.
 renderer/settings.js     Modal de configuración.
 renderer/dialogs.js      Diálogos del agente: permisos, preguntas, plan, elicitación MCP.   (subagente)
@@ -74,6 +76,7 @@ Eventos del bus interno: `conv:activated {convId}`, `settings:changed`, `folder:
 | `exportSave({ defaultName, text })` | `ruta | null` | Diálogo de guardar y escritura del texto. |
 | `convReply({ reqId, ...respuesta })` | — | Respuesta a un diálogo pendiente (ver eventos `conv:ask`). |
 | `listSessions()` | `[{ sessionId, summary, lastModified, title, pinned }]` | Historial de la carpeta actual; fijadas primero, luego más reciente. `title` es el nombre guardado o `null`. |
+| `sessionMessages(sessionId)` | `[{ role, uuid, text, tools:[{id,name,input}] }]` | Transcripción simplificada (sin subagentes ni mensajes internos del CLI) para repintar el hilo al reanudar. |
 | `scheduleList()` | `[tarea]` | Ver sección Tareas programadas. |
 | `scheduleSave(tarea)` | `[tarea]` | Crea o actualiza (por `id`). |
 | `scheduleDelete(id)` | `[tarea]` | |

@@ -73,7 +73,10 @@ comando). Llegan `system/status` (`compacting`, `compact_result`) y `system/comp
 turnos el SDK responde "Not enough messages to compact" y la app avisa. Los eventos de límite de tasa
 (`rate_limit_event`) y los reintentos (`system/api_retry`) se traducen a `conv:status` para la barra de estado.
 
-**Sesiones/historial**: `listSessions({dir})` del SDK. Con rutas cortas de Windows (`JULIOC~1`) no
+**Sesiones/historial**: `src/main/sessions.js`. `list()` usa `listSessions({dir})` del SDK y `messages(id)` usa
+`getSessionMessages` (texto y tool_use, sin subagentes) para que `renderer/convlist.js` repinte el hilo al
+reanudar (`ConvList.resume` → `replay` con los internos que expone `window.Chat`). La barra lateral tiene una
+sola lista: filas `.conv.open` (abiertas) y `.conv.hist` (anteriores). Con rutas cortas de Windows (`JULIOC~1`) no
 casa por `dir`; hay un respaldo que filtra por `cwd`. El renderer oculta las sesiones que ya están
 abiertas como conversación. Nombre y fijado se guardan en `config.convMeta[sessionId]` (`conv:meta`), se
 fusionan en `sessions:list` (fijadas primero) y se aplican al reanudar; una conversación renombrada antes
@@ -83,8 +86,8 @@ de su primer turno se persiste al llegar `conv:init`.
 herramientas se permiten con el prefijo `mcp__<id>`. `sessions:list` y el SDK también cargan los
 servidores MCP del usuario de `~/.claude` (aparecen como `needs-auth`); no es un error.
 
-**Renderer**: la barra lateral solo tiene "Nueva conversación", la lista de conversaciones abiertas y las
-anteriores (historial con búsqueda) y "Configuración"; la carpeta de trabajo es la píldora `#ws-pill` de la
+**Renderer**: la barra lateral solo tiene "Nueva conversación", una lista única de conversaciones
+(abiertas y anteriores, `convlist.js`) con búsqueda y "Configuración"; la carpeta de trabajo es la píldora `#ws-pill` de la
 barra superior (menú con ruta, cambiar, abrir) y las skills se listan en Configuración › Skills (`#skills`,
 lo pinta `app.js`). Configuración (`settings.js`) es un modal con `nav.cfg-nav` y paneles `.cfg-pane[data-pane]`;
 `Settings.open(pane?)` abre en "general" por defecto. El indicador de estado (`#status-text`) está oculto

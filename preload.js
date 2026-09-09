@@ -37,6 +37,7 @@ contextBridge.exposeInMainWorld("agente", {
   exportSave: invoke("export:save"),
   convReply: invoke("conv:reply"),
   listSessions: invoke("sessions:list"),
+  sessionMessages: invoke("sessions:messages"),
   convMeta: invoke("conv:meta"),
   // tareas programadas
   scheduleList: invoke("schedule:list"),

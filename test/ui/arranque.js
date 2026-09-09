@@ -18,7 +18,7 @@ module.exports = async ({ page, check, sleep, WS, ACT }) => {
   check("elegir skill cierra configuración e inserta /skill", !(await page.$eval("#overlay", (e) => e.classList.contains("open"))) && (await page.inputValue("#input")) === "/demo-skill ");
   await page.fill("#input", "");
   check("indicador Listo/Trabajando oculto", await page.isHidden("#status-text"));
-  check("conversación inicial creada", (await page.$$("#convs .conv")).length === 1 && !!(await page.$(".thread.active .hero")));
+  check("conversación inicial creada", (await page.$$("#convs .conv.open")).length === 1 && !!(await page.$(".thread.active .hero")));
   check("sugerencia oculta con 3 memorias", !(await page.isVisible(ACT("suggest"))) && (await page.isVisible(ACT("explore"))));
   // Clave de API: con .env la bienvenida no aparece; forzada, rechaza formatos inválidos sin llamar al SDK.
   check("bienvenida oculta con clave", !(await page.isVisible("#welcome")));

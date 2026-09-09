@@ -113,6 +113,7 @@ h("conv:rewind", (o) => agent.rewind(o));
 h("conv:diff", (o) => agent.diff(o));
 h("conv:reply", (o) => agent.reply(o));
 h("sessions:list", () => agent.sessions());
+h("sessions:messages", (id) => agent.sessionMessages(id));
 h("conv:meta", ({ sessionId, ...patch }) => cfg.setConvMeta(sessionId, patch));
 
 h("schedule:list", () => scheduler.list());

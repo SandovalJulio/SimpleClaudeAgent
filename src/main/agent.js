@@ -5,11 +5,12 @@ const path = require("path");
 const fs = require("fs");
 const crypto = require("crypto");
 const Diff = require("diff");
-const { query, listSessions } = require("@anthropic-ai/claude-agent-sdk");
+const { query } = require("@anthropic-ai/claude-agent-sdk");
 const cfg = require("./config");
 const mem = require("./memory");
 const agents = require("./agents");
 const { buildHooks } = require("./hooks");
+const sessions = require("./sessions");
 
 const convs = new Map();   // convId -> conv
 const pending = new Map(); // reqId -> resolve (diálogos esperando al usuario)
@@ -369,21 +370,6 @@ async function applySettings() {
     try { await c.q.setPermissionMode(cfg.settings.permission); } catch { /* idem */ }
   }
 }
-async function sessions() {
-  const dir = cfg.getFolder();
-  let list = await listSessions({ dir, limit: 30 });
-  if (!list.length) {
-    // Respaldo: rutas con nombre corto de Windows (JULIOC~1) no casan por `dir`; filtramos por cwd.
-    const norm = (p) => path.resolve(p).replace(/[\\/]+$/, "").toLowerCase();
-    list = (await listSessions({ limit: 300 })).filter((s) => s.cwd && norm(s.cwd) === norm(dir)).slice(0, 30);
-  }
-  // Nombre personalizado y fijado guardados en config (fijadas primero, luego por fecha).
-  const meta = cfg.getConfig().convMeta || {};
-  return list
-    .map((s) => ({ sessionId: s.sessionId, summary: s.summary, lastModified: s.lastModified, title: meta[s.sessionId]?.title || null, pinned: !!meta[s.sessionId]?.pinned }))
-    .sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
-}
-
 // Consulta de un solo turno, sin UI (tareas programadas).
 // opts.schema: JSON Schema -> salida estructurada en `structured`. opts.signal: AbortSignal para cancelar.
 async function runOnce(prompt, { schema, signal } = {}) {
@@ -405,4 +391,4 @@ async function runOnce(prompt, { schema, signal } = {}) {
   return out;
 }
 
-module.exports = { init, create, send, stop, compact, close, closeAll, rewind, reply, applySettings, sessions, runOnce, diff, status, validateApiKey, count: () => convs.size };
+module.exports = { init, create, send, stop, compact, close, closeAll, rewind, reply, applySettings, sessions: sessions.list, sessionMessages: sessions.messages, runOnce, diff, status, validateApiKey, count: () => convs.size };

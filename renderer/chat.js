@@ -76,28 +76,10 @@
       if (next) activate(next); else createConv();
     }
     renderConvList();
-    setTimeout(loadHistory, 600); // la sesión cerrada pasa al historial
+    setTimeout(() => window.ConvList?.load(), 600); // la sesión cerrada vuelve a listarse como anterior
   }
   let renaming = null; // conversación cuyo título se está editando en línea
-  function renderConvList() {
-    if (renaming) return; // no destruir el elemento editable
-    const box = $("convs"); box.innerHTML = "";
-    $("convs-cnt").textContent = state.convs.size > 1 ? `· ${state.convs.size}` : "";
-    const list = [...state.convs.values()].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0)); // fijadas primero
-    for (const c of list) {
-      // div y no button: el texto dentro de un <button> no puede editarse en línea.
-      const b = document.createElement("div"); b.setAttribute("role", "button"); b.tabIndex = 0;
-      b.className = "conv" + (c.id === state.activeConv ? " active" : "") + (c.pinned ? " pinned" : "");
-      b.title = "Doble clic: renombrar · Clic derecho: fijar";
-      b.innerHTML = `<span class="dot ${c.busy ? "busy" : ""}"></span><span class="t">${esc(c.title)}</span><span class="pin" title="${c.pinned ? "Desfijar" : "Fijar"}">📌</span><span class="x" title="Cerrar">×</span>`;
-      b.onclick = () => activate(c.id);
-      b.ondblclick = (e) => { e.preventDefault(); renameConv(c, b.querySelector(".t")); };
-      b.oncontextmenu = (e) => { e.preventDefault(); togglePin(c); };
-      b.querySelector(".pin").onclick = (e) => { e.stopPropagation(); togglePin(c); };
-      b.querySelector(".x").onclick = (e) => { e.stopPropagation(); closeConv(c.id); };
-      box.appendChild(b);
-    }
-  }
+  const renderConvList = () => window.ConvList?.render(); // lista única de conversaciones (convlist.js)
   // Nombre y fijado se guardan en config.json por sessionId (main: setConvMeta) y se aplican al listar el historial.
   function persistMeta(conv) {
     if (!conv.sessionId) return; // aún sin sesión del SDK: se guarda al llegar conv:init
@@ -200,29 +182,6 @@
   }
   on("memory:changed", () => state.convs.forEach(updateSuggestChip));
 
-  // ---------- Historial ----------
-  let historyCache = [];
-  async function loadHistory(fromCache) {
-    const box = $("history");
-    try {
-      if (!fromCache) historyCache = await window.agente.listSessions();
-      const q = ($("history-search").value || "").trim().toLowerCase();
-      const openIds = new Set([...state.convs.values()].map((c) => c.sessionId));
-      const items = historyCache.filter((s) => !openIds.has(s.sessionId) && (!q || (s.summary || "").toLowerCase().includes(q))).slice(0, q ? 50 : 15);
-      box.innerHTML = items.length ? "" : `<div class="empty">${q ? "Sin coincidencias." : "Sin conversaciones anteriores."}</div>`;
-      for (const s of items) {
-        const b = document.createElement("button"); b.className = "hist"; b.title = "Clic: continuar · Clic derecho: bifurcar (copia nueva)";
-        if (s.pinned) b.classList.add("pinned");
-        b.innerHTML = `<span class="t">${s.pinned ? "📌 " : ""}${esc(s.title || s.summary || "Sin título")}</span><span class="d">${new Date(s.lastModified).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" })}</span>`;
-        b.onclick = () => createConv({ resume: s.sessionId }).then((c) => { if (!c) return; c.title = s.title || s.summary || c.title; c.renamed = !!s.title; c.pinned = !!s.pinned; c.sessionId = s.sessionId; activate(c.id); renderConvList(); });
-        b.oncontextmenu = (e) => { e.preventDefault(); createConv({ resume: s.sessionId, fork: true }).then((c) => { if (!c) return; c.title = "Copia: " + (s.summary || ""); activate(c.id); }); };
-        box.appendChild(b);
-      }
-    } catch (e) { box.innerHTML = `<div class="empty">No se pudo leer el historial.</div>`; }
-  }
-  on("history:refresh", () => loadHistory(false));
-  $("history-search").addEventListener("input", () => loadHistory(true));
-
   // ---------- Mensajes ----------
   function scrollBottom(conv, force) {
     const t = conv.el;
@@ -319,14 +278,17 @@
     turn.suggestions.appendChild(b);
     scrollBottom(conv);
   }
+  function collapseActivity(turn) {
+    for (const d of turn.body.querySelectorAll("details.activity")) {
+      const n = d.querySelectorAll(".step").length;
+      d.querySelector(".label").textContent = `${n} paso${n > 1 ? "s" : ""} realizado${n > 1 ? "s" : ""}`;
+      d.querySelector("summary .spinner")?.remove(); d.open = false;
+    }
+  }
   function finishTurn(conv, r) {
     const turn = conv.turn; conv.busy = false; setStatusIfActive(conv);
     if (turn) {
-      for (const d of turn.body.querySelectorAll("details.activity")) {
-        const n = d.querySelectorAll(".step").length;
-        d.querySelector(".label").textContent = `${n} paso${n > 1 ? "s" : ""} realizado${n > 1 ? "s" : ""}`;
-        d.querySelector("summary .spinner")?.remove(); d.open = false;
-      }
+      collapseActivity(turn);
       if (r.error) { const e = document.createElement("div"); e.className = "error"; e.textContent = "Error: " + r.error; turn.body.appendChild(e); }
       if (r.subtype === "aborted") { const e = document.createElement("div"); e.className = "meta"; e.textContent = "Detenido por el usuario."; turn.body.appendChild(e); }
       if (r.files?.length && window.FilesPanel) { const box = document.createElement("div"); box.className = "files-out"; turn.body.appendChild(box); window.FilesPanel.render(box, r.files, conv.id); }
@@ -414,5 +376,6 @@
   on("app:ready", () => createConv());
   on("apikey:ready", () => { if (!state.convs.size) createConv(); });
 
-  window.Chat = { send, stop, active, createConv, activate, closeConv };
+  // Internos que usa convlist.js para pintar la lista y repintar una sesión reanudada.
+  window.Chat = { send, stop, active, createConv, activate, closeConv, renameConv, togglePin, persistMeta, addUser, startTurn, appendDelta, addTool, toolDone, collapseActivity, isRenaming: () => !!renaming };
 })();

@@ -94,8 +94,9 @@ herramientas de desarrollo.
 ### Conversación
 - **Conversaciones en paralelo.** Varias a la vez, cada una con su propio proceso del SDK. La barra
   lateral las lista con un indicador de actividad.
-- **Conversaciones anteriores** con búsqueda, debajo de las abiertas en la misma sección. Clic para
-  continuar donde lo dejaste; clic derecho para bifurcar una copia sin tocar la original.
+- **Una sola lista de conversaciones** en la barra lateral: las abiertas y las anteriores (sesiones
+  del SDK) juntas, con búsqueda. Clic en una anterior la reanuda **y repinta su transcripción**
+  (mensajes, respuestas y herramientas); ⑂ bifurca una copia sin tocar la original.
 - **Renombrar** (doble clic en el título) y **fijar** (clic derecho o 📌) conversaciones. Nombre y
   fijado se guardan por sesión y se aplican en el historial y al reanudar.
 - **Menú ⋯** de la conversación: **Compactar** (resume el contexto anterior con el comando `/compact`
@@ -293,7 +294,8 @@ preload.js               Expone window.agente al renderer
 src/main/
   config.js              Configuración persistente, clave de API cifrada, carpeta, catálogos, convMeta
   memory.js              Skills (y las de ejemplo), CLAUDE.md, perfil sin tokens, system prompt adicional
-  agent.js               Conversaciones (streaming-input), permisos, rewind, sesiones, compactar, runOnce
+  agent.js               Conversaciones (streaming-input), permisos, rewind, compactar, runOnce
+  sessions.js            Historial de sesiones del SDK y transcripción simplificada para reanudar
   agents.js              Subagentes lector y redactor e instrucciones de delegación
   hooks.js               Hooks: bloquear escrituras fuera de la carpeta y registrar cambios
   scheduler.js           Tareas programadas
@@ -302,7 +304,8 @@ renderer/
   styles.css             Tokens, layout, chat, compositor, configuración
   app.js                 Estado global, utilidades, bus interno, tema
   welcome.js             Pantalla de bienvenida (clave de API)
-  chat.js                Conversaciones en paralelo, mensajes, actividad, avisos, menú ⋯, conversaciones anteriores
+  chat.js                Conversaciones en paralelo, mensajes, actividad, avisos, menú ⋯
+  convlist.js            Lista única de conversaciones (abiertas + anteriores), reanudar con transcripción
   composer.js            Adjuntos, arrastrar y soltar, dictado, menú /, píldoras
   settings.js            Configuración: menú lateral con paneles (general, memorias, skills, herramientas, conexiones, tareas)
   dialogs.js             Tarjetas de permiso, preguntas, plan y elicitación
