@@ -7,6 +7,9 @@ contextBridge.exposeInMainWorld("agente", {
   getState: invoke("state:get"),
   setSettings: invoke("settings:set"),
   setConfig: invoke("config:set"),
+  apiKeyStatus: invoke("apikey:status"),
+  apiKeySet: invoke("apikey:set"),
+  apiKeyClear: invoke("apikey:clear"),
   // carpeta y archivos
   pickFolder: invoke("folder:pick"),
   setFolder: invoke("folder:set"),

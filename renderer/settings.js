@@ -10,6 +10,13 @@
         <div class="cfg-section"><div class="row"><div class="lbl"><b>¿Cómo quieres que el agente te llame?</b></div><input id="cfg-name" class="field" placeholder="Tu nombre" /></div></div>
 
         <div class="cfg-section">
+          <h3>Clave de API</h3>
+          <div class="row"><div class="lbl"><b>Clave de API de Anthropic</b><span id="cfg-key-status"></span>
+            <div class="cred"><div class="credrow"><input id="cfg-key" class="field" type="password" placeholder="sk-ant-…" autocomplete="off" spellcheck="false" /><button id="cfg-key-save" class="btn ghost">Guardar</button><button id="cfg-key-clear" class="btn ghost">Borrar</button></div>
+            <span class="help">Se comprueba con una consulta mínima y se guarda cifrada en este equipo. Nunca se muestra en la interfaz.</span></div></div></div>
+        </div>
+
+        <div class="cfg-section">
           <h3>Memorias</h3>
           <p class="desc">Lo que el agente ha aprendido de ti: correcciones, preferencias y perfil. Se guarda en <code id="mem-file">CLAUDE.md</code> de la carpeta de trabajo y se aplica en cada conversación. Puedes editarlo libremente.</p>
           <div id="mem-summary" class="mem-summary"></div>
@@ -65,7 +72,7 @@
     $("cfg-name").value = state.config.name || "";
     $("cfg-budget").value = state.config.maxBudgetUsd || 0;
     $("cfg-turns").value = state.config.maxTurns || 0;
-    renderSwitches(); renderPaths(); renderConnections();
+    renderSwitches(); renderPaths(); renderConnections(); renderApiKey();
     await loadMemoryEditor();
     if (!$("cfg-schedules").dataset.mounted && window.SchedulesUI) { window.SchedulesUI.mount($("cfg-schedules")); $("cfg-schedules").dataset.mounted = "1"; }
     renderTheme();
@@ -83,6 +90,30 @@
   $("cfg-name").addEventListener("change", () => setConfig({ name: $("cfg-name").value }));
   $("cfg-budget").addEventListener("change", () => setConfig({ maxBudgetUsd: Math.max(0, Number($("cfg-budget").value) || 0) }));
   $("cfg-turns").addEventListener("change", () => setConfig({ maxTurns: Math.max(0, Math.floor(Number($("cfg-turns").value) || 0)) }));
+
+  // Clave de API: estado (origen), guardar (valida en main) y borrar (cierra las conversaciones).
+  const KEY_SOURCE = { config: "Guardada cifrada en este equipo.", env: "Tomada del entorno (.env o variable ANTHROPIC_API_KEY).", none: "No configurada: el agente no puede funcionar." };
+  function renderApiKey() {
+    const st = state.apiKey || { has: false, source: "none" };
+    $("cfg-key-status").textContent = KEY_SOURCE[st.source] || KEY_SOURCE.none;
+    $("cfg-key-clear").hidden = st.source !== "config";
+    $("cfg-key").value = "";
+  }
+  $("cfg-key-save").onclick = async () => {
+    const key = $("cfg-key").value.trim();
+    if (!key) return toast("Escribe la clave antes de guardar.", "err");
+    $("cfg-key-status").textContent = "Comprobando la clave…";
+    const r = await window.agente.apiKeySet(key);
+    if (!r.ok) { $("cfg-key-status").textContent = "No se pudo validar: " + (r.error || "error desconocido"); return; }
+    state.apiKey = r.status; renderApiKey(); toast("Clave guardada de forma cifrada.", "ok");
+    window.App.emit("convs:reset"); // las conversaciones abiertas se cerraron en main
+  };
+  $("cfg-key-clear").onclick = async () => {
+    state.apiKey = await window.agente.apiKeyClear(); renderApiKey();
+    toast(state.apiKey.has ? "Clave borrada; se usa la del entorno." : "Clave borrada.", "ok");
+    window.App.emit("convs:reset");
+    if (!state.apiKey.has) { close(); window.App.emit("apikey:cleared"); }
+  };
 
   function renderSwitches() {
     root.querySelectorAll("[data-cfg]").forEach((b) => {

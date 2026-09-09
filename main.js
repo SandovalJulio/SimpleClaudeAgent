@@ -3,7 +3,9 @@ const { app, BrowserWindow, Menu, Notification, ipcMain, dialog, shell } = requi
 const path = require("path");
 const fs = require("fs");
 
-try { process.loadEnvFile(path.join(__dirname, ".env")); } catch { /* sin .env: variable del sistema */ }
+// Solo en desarrollo: .env junto a main.js. La app instalada guarda la clave cifrada en config.json.
+try { process.loadEnvFile(path.join(__dirname, ".env")); } catch { /* sin .env: variable del sistema o clave guardada */ }
+if (process.env.AGENTE_SIN_CLAVE) delete process.env.ANTHROPIC_API_KEY; // pruebas: simula la primera ejecución
 
 const cfg = require("./src/main/config");
 const mem = require("./src/main/memory");
@@ -38,6 +40,7 @@ function createWindow() {
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
   cfg.load();
+  cfg.loadApiKey(); // antes de crear cualquier conversación: el SDK la toma de process.env
   agent.init({ emit, notify });
   scheduler.start({ getConfig: cfg.getConfig, saveConfig: cfg.save, runOnce: agent.runOnce, notify: (t, b) => Notification.isSupported() && new Notification({ title: t, body: b }).show(), emit, getFolder: cfg.getFolder });
   createWindow();
@@ -48,9 +51,14 @@ app.on("window-all-closed", () => { agent.closeAll(); app.quit(); });
 const h = (ch, fn) => ipcMain.handle(ch, (_e, ...a) => fn(...a));
 
 // El renderer nunca recibe secretos: `publicConfig()` sustituye credenciales por indicadores.
-h("state:get", () => ({ folder: cfg.getFolder(), settings: cfg.settings, models: cfg.MODELS, efforts: cfg.EFFORTS, permissions: cfg.PERMISSIONS, connections: cfg.CONNECTIONS, config: cfg.publicConfig() }));
+h("state:get", () => ({ folder: cfg.getFolder(), settings: cfg.settings, models: cfg.MODELS, efforts: cfg.EFFORTS, permissions: cfg.PERMISSIONS, connections: cfg.CONNECTIONS, config: cfg.publicConfig(), apiKey: cfg.apiKeyStatus() }));
 h("settings:set", async (patch) => { const s = cfg.setSettings(patch); await agent.applySettings(); return s; });
 h("config:set", (patch) => { cfg.setConfig(patch); return cfg.publicConfig(); });
+
+// Clave de API: se valida con una consulta mínima antes de guardarla cifrada. Borrarla cierra las conversaciones.
+h("apikey:status", () => cfg.apiKeyStatus());
+h("apikey:set", async (key) => { const r = await agent.validateApiKey(key); if (r.ok) { agent.closeAll(); cfg.setApiKey(key); } return { ...r, status: cfg.apiKeyStatus() }; });
+h("apikey:clear", () => { agent.closeAll(); return cfg.setApiKey(""); });
 h("mcp:status", () => agent.status());
 
 // Exportar texto a un archivo elegido por el usuario (conversaciones en Markdown).
@@ -108,13 +116,8 @@ h("schedule:delete", (id) => scheduler.remove(id));
 h("schedule:run", (id) => scheduler.run(id));
 h("schedule:cancel", (id) => scheduler.cancel(id));
 
-// --- Empaquetado: .env junto al ejecutable y actualizaciones automáticas ---
-// Solo aplica a la app instalada. Ver docs/EMPAQUETADO.md.
+// --- Empaquetado: actualizaciones automáticas (solo la app instalada). Ver docs/EMPAQUETADO.md.
 if (app.isPackaged) {
-  // Dentro del asar __dirname no es una carpeta real, así que se busca el .env
-  // junto al ejecutable instalado (además del que carga la línea 6).
-  try { process.loadEnvFile(path.join(path.dirname(process.execPath), ".env")); } catch { /* sin .env: variable del sistema */ }
-
   app.whenReady().then(() => {
     try {
       const { autoUpdater } = require("electron-updater");

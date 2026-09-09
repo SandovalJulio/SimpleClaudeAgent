@@ -72,7 +72,27 @@ function publicConfig() {
     const s = connState(c.id);
     connections[c.id] = { enabled: s.enabled, has: Object.fromEntries((c.fields || []).map((f) => [f.key, !!s.values?.[f.key]])) };
   }
-  return { ...config, connections };
+  const { apiKey, ...rest } = config;
+  return { ...rest, connections, hasApiKey: !!apiKey };
+}
+
+// Clave de API. La guardada (cifrada en config.json) tiene prioridad; la del entorno
+// (.env en desarrollo o variable ANTHROPIC_API_KEY) es el respaldo. El SDK la lee de process.env.
+let envKey = "";
+function loadApiKey() {
+  envKey = process.env.ANTHROPIC_API_KEY || "";
+  const saved = config.apiKey ? decrypt(config.apiKey) : "";
+  if (saved) process.env.ANTHROPIC_API_KEY = saved;
+}
+function apiKeyStatus() {
+  return { has: !!process.env.ANTHROPIC_API_KEY, source: config.apiKey ? "config" : envKey ? "env" : "none" };
+}
+function setApiKey(text) {
+  const t = String(text || "").trim();
+  if (t) { config.apiKey = encrypt(t); process.env.ANTHROPIC_API_KEY = t; }
+  else { delete config.apiKey; if (envKey) process.env.ANTHROPIC_API_KEY = envKey; else delete process.env.ANTHROPIC_API_KEY; }
+  save();
+  return apiKeyStatus();
 }
 
 // Ajustes volátiles del compositor (se persisten en el renderer con localStorage).
@@ -141,6 +161,7 @@ function setConfig(patch = {}) {
 
 module.exports = {
   MODELS, EFFORTS, PERMISSIONS, CONNECTIONS, mcpServerFor, connState, connValues, publicConfig,
+  loadApiKey, apiKeyStatus, setApiKey,
   settings, setSettings, setConfig, load, save,
   getConfig: () => config, getFolder: () => folder, setFolder,
 };

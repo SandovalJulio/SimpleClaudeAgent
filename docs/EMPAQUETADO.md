@@ -47,21 +47,20 @@ CSC_IDENTITY_AUTO_DISCOVERY=false npm run dist
 
 ## La clave de API en la app instalada
 
-En desarrollo, `main.js` lee `.env` **junto a `main.js`** con `process.loadEnvFile`. Empaquetada,
-`__dirname` apunta dentro del `app.asar`, así que ese `.env` no existe. Hay dos opciones:
+La app instalada **no necesita `.env`**. La primera vez que arranca sin clave muestra una pantalla
+de bienvenida que la pide, la comprueba con una consulta mínima al SDK (Haiku, un turno, menos de
+un centavo) y la guarda **cifrada con `safeStorage`** en `config.json`
+(`%APPDATA%\agente-escritorio\config.json`, campo `apiKey`, prefijo `enc:`). Al arrancar,
+`cfg.loadApiKey()` la descifra y la pone en `process.env.ANTHROPIC_API_KEY` antes de crear
+conversaciones; el CLI del SDK la toma de ahí. Se cambia o se borra en **Configuración › Clave de API**.
 
-1. **Variable de entorno del sistema** (recomendado): define `ANTHROPIC_API_KEY` en las variables
-   de entorno del usuario de Windows y reinicia la app.
-2. **Archivo `.env` junto al ejecutable instalado**: crea
-   `%LOCALAPPDATA%\Programs\Agente\.env` (o la carpeta que hayas elegido al instalar) con:
+Orden de prioridad: clave guardada → variable de entorno `ANTHROPIC_API_KEY` del sistema → `.env`
+junto a `main.js` (solo en desarrollo; dentro del `app.asar` ese archivo no existe y no se busca en
+ningún otro sitio). El `.env` del repositorio nunca se empaqueta (excluido en `build.files`).
 
-   ```
-   ANTHROPIC_API_KEY=sk-ant-...
-   ```
-
-   El bloque final de `main.js` carga ese archivo cuando `app.isPackaged`.
-
-El `.env` del repositorio nunca se empaqueta (está excluido en `build.files`).
+Detalle importante: si la app se lanza desde un proceso de Claude Code, hereda `CLAUDECODE` y
+`CLAUDE_CODE_*`, y el CLI del SDK se comportaría como sesión hija (usaría el login OAuth del padre
+e ignoraría la clave). `agent.js` limpia esas variables en `env` de cada `query()`.
 
 ## Publicar una release para las actualizaciones
 

@@ -19,6 +19,8 @@ const USER_DATA = fs.mkdtempSync(path.join(os.tmpdir(), "agente-userdata-"));
 
 const electron = path.join(APP_DIR, "node_modules", ".bin", process.platform === "win32" ? "electron.cmd" : "electron");
 const env = { ...process.env, AGENTE_USER_DATA: USER_DATA }; delete env.ELECTRON_RUN_AS_NODE;
+// Si la prueba corre dentro de Claude Code, el CLI del SDK heredaría su sesión (la app también las limpia).
+for (const k of Object.keys(env)) if (/^(CLAUDECODE|CLAUDE_CODE_|CLAUDE_PID$|CLAUDE_EFFORT$)/.test(k)) delete env[k];
 const PORT = 9400 + Math.floor(Math.random() * 500);
 const proc = spawn(`"${electron}" . --remote-debugging-port=${PORT}`, { cwd: APP_DIR, env, shell: true, stdio: "ignore" });
 
@@ -46,6 +48,11 @@ const ACT = (a) => `.thread.active [data-act="${a}"]`;
   check("skills listadas", (await page.$$(".skill")).length === 1);
   check("conversación inicial creada", (await page.$$("#convs .conv")).length === 1 && !!(await page.$(".thread.active .hero")));
   check("sugerencia oculta con 3 memorias", !(await page.isVisible(ACT("suggest"))) && (await page.isVisible(ACT("explore"))));
+  // Clave de API: con .env la bienvenida no aparece; forzada, rechaza formatos inválidos sin llamar al SDK.
+  check("bienvenida oculta con clave", !(await page.isVisible("#welcome")));
+  await page.evaluate(() => window.Welcome.show()); await page.fill("#welcome-key", "abc"); await page.click("#welcome-save"); await sleep(300);
+  check("bienvenida rechaza formato inválido", (await page.isVisible("#welcome")) && (await page.textContent("#welcome-status")).includes("formato"));
+  await page.evaluate(() => window.Welcome.hide());
 
   // Tarjetas de inicio
   await page.click(ACT("create")); await sleep(300);
@@ -104,6 +111,7 @@ const ACT = (a) => `.thread.active [data-act="${a}"]`;
   // Configuración
   await page.click("#open-config"); await sleep(500);
   check("abre configuración", await page.$eval("#overlay", (e) => e.classList.contains("open")));
+  check("clave de API tomada del entorno", (await page.evaluate(() => window.agente.apiKeyStatus())).source === "env" && (await page.textContent("#cfg-key-status")).includes("entorno") && (await page.isHidden("#cfg-key-clear")));
   check("memorias cargadas en editor", (await page.inputValue("#mem-edit")).includes("## Memoria"));
   check("conexiones listadas", (await page.$$("#cfg-connections .switch")).length === 7);
   // Conexión con credencial: no se activa sin token; con token guardado (cifrado) sí, y el renderer no recibe el secreto.

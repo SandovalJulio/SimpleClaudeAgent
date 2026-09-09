@@ -26,6 +26,8 @@
   // ---------- Conversaciones ----------
   // conv = { id, title, busy, el(thread), inner, turn, cost, sessionId, hasMessages, lastUuid }
   function createConv({ resume, fork } = {}) {
+    // Sin clave de API no hay proceso del SDK: se muestra la bienvenida y se devuelve null.
+    if (state.apiKey && !state.apiKey.has) { window.Welcome?.show(); return Promise.resolve(null); }
     return window.agente.convNew({ resume, fork }).then(({ convId }) => {
       const el = document.createElement("div"); el.className = "thread"; el.id = "conv-" + convId;
       const inner = document.createElement("div"); inner.className = "inner"; el.appendChild(inner);
@@ -154,8 +156,8 @@
       for (const s of items) {
         const b = document.createElement("button"); b.className = "hist"; b.title = "Clic: continuar · Clic derecho: bifurcar (copia nueva)";
         b.innerHTML = `<span class="t">${esc(s.summary || "Sin título")}</span><span class="d">${new Date(s.lastModified).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" })}</span>`;
-        b.onclick = () => createConv({ resume: s.sessionId }).then((c) => { c.title = s.summary || c.title; c.sessionId = s.sessionId; activate(c.id); });
-        b.oncontextmenu = (e) => { e.preventDefault(); createConv({ resume: s.sessionId, fork: true }).then((c) => { c.title = "Copia: " + (s.summary || ""); activate(c.id); }); };
+        b.onclick = () => createConv({ resume: s.sessionId }).then((c) => { if (!c) return; c.title = s.summary || c.title; c.sessionId = s.sessionId; activate(c.id); });
+        b.oncontextmenu = (e) => { e.preventDefault(); createConv({ resume: s.sessionId, fork: true }).then((c) => { if (!c) return; c.title = "Copia: " + (s.summary || ""); activate(c.id); }); };
         box.appendChild(b);
       }
     } catch (e) { box.innerHTML = `<div class="empty">No se pudo leer el historial.</div>`; }
@@ -337,8 +339,9 @@
 
   // ---------- Controles ----------
   $("new-chat").onclick = () => createConv();
-  on("convs:reset", () => { for (const c of [...state.convs.values()]) { c.el.remove(); } state.convs.clear(); createConv(); });
+  on("convs:reset", () => { for (const c of [...state.convs.values()]) { c.el.remove(); } state.convs.clear(); renderConvList(); createConv(); });
   on("app:ready", () => createConv());
+  on("apikey:ready", () => { if (!state.convs.size) createConv(); });
 
   window.Chat = { send, stop, active, createConv, activate, closeConv };
 })();

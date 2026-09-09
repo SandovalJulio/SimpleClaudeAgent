@@ -21,6 +21,15 @@ function init({ emit: e, notify: n }) { emit = e; notify = n; }
 
 const WRITE_TOOLS = new Set(["Write", "Edit", "MultiEdit", "NotebookEdit"]);
 
+// Entorno para el proceso del CLI. Si la app se lanza desde dentro de Claude Code (o de la prueba
+// que corre ahí), hereda CLAUDECODE / CLAUDE_CODE_* y el CLI se comporta como sesión hija: usa el
+// login OAuth del padre e ignora ANTHROPIC_API_KEY. Se quitan para que la clave de la app mande.
+function cleanEnv(extra = {}) {
+  const env = {};
+  for (const [k, v] of Object.entries(process.env)) if (!/^(CLAUDECODE|CLAUDE_CODE_|CLAUDE_PID$|CLAUDE_EFFORT$|CLAUDE_AGENT_SDK_VERSION$|AI_AGENT$)/.test(k)) env[k] = v;
+  return { ...env, ...extra };
+}
+
 // ---------- Opciones del SDK ----------
 function buildOptions(conv, { resume, fork, oneShot } = {}) {
   const folder = cfg.getFolder();
@@ -41,7 +50,7 @@ function buildOptions(conv, { resume, fork, oneShot } = {}) {
     mem.profileSummary(profile);
 
   return {
-    model, effort, cwd: folder,
+    model, effort, cwd: folder, env: cleanEnv(),
     settingSources: ["user", "project"],
     systemPrompt: { type: "preset", preset: "claude_code", append },
     allowedTools,
@@ -103,10 +112,46 @@ async function canUseTool(conv, toolName, input, { suggestions } = {}) {
   return { behavior: "allow", updatedInput: input, ...(r.always && suggestions ? { updatedPermissions: suggestions } : {}) };
 }
 
+// ---------- Clave de API ----------
+const AUTH_ERRORS = {
+  authentication_failed: "La clave no es válida o fue revocada.",
+  billing_error: "La cuenta tiene un problema de facturación o no tiene crédito.",
+  account_on_hold: "La cuenta está suspendida.",
+  rate_limit: "Límite de tasa alcanzado; prueba en unos minutos.",
+  overloaded: "La API está saturada; prueba en unos minutos.",
+};
+// Comprueba una clave con la consulta más pequeña posible: Haiku, un turno, sin herramientas ni ajustes.
+// El CLI reintenta los 401 con espera creciente (minutos), así que se aborta al primer reintento por autenticación.
+async function validateApiKey(key) {
+  key = String(key || "").trim();
+  if (!/^\S{20,}$/.test(key)) return { ok: false, error: "La clave no tiene un formato válido." };
+  const abort = new AbortController();
+  const timer = setTimeout(() => abort.abort(), 45000);
+  let failure = null;
+  try {
+    const q = query({ prompt: "Responde únicamente: ok", options: {
+      model: cfg.MODELS[0].id, maxTurns: 1, tools: [], settingSources: [], systemPrompt: "Responde solo con la palabra ok.",
+      persistSession: false, env: cleanEnv({ ANTHROPIC_API_KEY: key }), abortController: abort,
+    } });
+    for await (const m of q) {
+      if (m.type === "system" && m.subtype === "init" && m.apiKeySource !== "ANTHROPIC_API_KEY") failure = "El SDK no usó la clave indicada (origen: " + m.apiKeySource + ").";
+      if (m.type === "system" && m.subtype === "api_retry" && (m.error in AUTH_ERRORS || m.error === "invalid_request" || m.attempt >= 3)) failure = AUTH_ERRORS[m.error] || `Sin respuesta válida de la API (${m.error}, HTTP ${m.error_status || "?"}).`;
+      if (m.type === "assistant" && m.error) failure = AUTH_ERRORS[m.error] || m.error;
+      if (failure) { abort.abort(); break; }
+      if (m.type === "result") return m.subtype === "success" && !m.is_error ? { ok: true } : { ok: false, error: (m.result || m.subtype || "").slice(0, 200) };
+    }
+    return { ok: false, error: failure || "El SDK no respondió." };
+  } catch (e) {
+    if (failure) return { ok: false, error: failure };
+    return { ok: false, error: abort.signal.aborted ? "Tiempo de espera agotado (¿hay conexión?)." : String(e.message || e) };
+  } finally { clearTimeout(timer); }
+}
+
 // ---------- Conversaciones ----------
 function create({ resume, fork } = {}) {
   const folder = cfg.getFolder();
   if (!folder) throw new Error("Primero elige una carpeta de trabajo.");
+  if (!cfg.apiKeyStatus().has) throw new Error("Falta la clave de API. Añádela en Configuración.");
   const id = crypto.randomUUID();
   const queue = []; let wake = null; let closed = false;
   async function* input() {
@@ -289,6 +334,7 @@ async function sessions() {
 // Consulta de un solo turno, sin UI (tareas programadas).
 // opts.schema: JSON Schema -> salida estructurada en `structured`. opts.signal: AbortSignal para cancelar.
 async function runOnce(prompt, { schema, signal } = {}) {
+  if (!cfg.apiKeyStatus().has) return { ok: false, text: "", cost: 0, error: "Falta la clave de API.", structured: null };
   const abort = new AbortController();
   if (signal) signal.addEventListener("abort", () => abort.abort(), { once: true });
   const conv = { id: "once", folder: cfg.getFolder(), profile: mem.loadProfile(cfg.getFolder()), abort };
@@ -306,4 +352,4 @@ async function runOnce(prompt, { schema, signal } = {}) {
   return out;
 }
 
-module.exports = { init, create, send, stop, close, closeAll, rewind, reply, applySettings, sessions, runOnce, diff, status, count: () => convs.size };
+module.exports = { init, create, send, stop, close, closeAll, rewind, reply, applySettings, sessions, runOnce, diff, status, validateApiKey, count: () => convs.size };

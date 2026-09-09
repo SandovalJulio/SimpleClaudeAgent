@@ -94,7 +94,7 @@
   window.addEventListener("DOMContentLoaded", async () => {
     applyTheme(); applyFont();
     const s = await window.agente.getState();
-    Object.assign(state, { settings: s.settings, config: s.config, models: s.models, efforts: s.efforts, permissions: s.permissions, connections: s.connections });
+    Object.assign(state, { settings: s.settings, config: s.config, models: s.models, efforts: s.efforts, permissions: s.permissions, connections: s.connections, apiKey: s.apiKey });
     let saved = null;
     try { saved = JSON.parse(localStorage.getItem("settings") || "null"); } catch { /* ignorar */ }
     if (saved) state.settings = await window.agente.setSettings(saved);
