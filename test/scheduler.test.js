@@ -149,6 +149,31 @@ function ok(msg) {
   assert.deepStrictEqual(scheduler.tick(), [], "tras ejecutarse ya no vuelve a dispararse");
   ok("las ejecuciones perdidas no se acumulan");
 
+  // --- esquema JSON: salida estructurada en .md y .jsonl ------------------
+  const schemaTxt = '{"type":"object","properties":{"resumen":{"type":"string"},"pendientes":{"type":"integer"}},"required":["resumen"]}';
+  assert.throws(() => scheduler.save({ name: "Mal", prompt: "p", every: "hour", schema: "{no es json" }), /esquema JSON/, "esquema inválido rechazado");
+  const t3 = scheduler.save({ name: "Estructurada", prompt: "Cuenta pendientes.", every: "hour", schema: schemaTxt });
+  const task3 = t3[t3.length - 1];
+  assert.strictEqual(task3.schema.type, "object", "el esquema se guarda parseado");
+  let schemaRecibido = null;
+  scheduler.start({
+    getConfig: () => config, saveConfig: () => {}, getFolder: () => folder,
+    runOnce: async (prompt, opts) => { schemaRecibido = opts.schema; return { ok: true, text: "Hecho.", cost: 0.001, structured: { resumen: "Dos pendientes", pendientes: 2 } }; },
+    notify: () => {}, emit: (e, d) => emitted.push({ event: e, data: d }),
+  });
+  await scheduler.run(task3.id);
+  await scheduler.run(task3.id);
+  assert.deepStrictEqual(schemaRecibido, JSON.parse(schemaTxt), "runOnce recibe el esquema");
+  const md = fs.readFileSync(path.join(folder, ".claude", "programadas", task3.id + ".md"), "utf8");
+  assert.ok(md.includes('"pendientes": 2') && md.includes("Hecho."), "el .md incluye el JSON y el texto");
+  const jsonl = fs.readFileSync(path.join(folder, ".claude", "programadas", task3.id + ".jsonl"), "utf8").trim().split("\n");
+  assert.strictEqual(jsonl.length, 2, "una línea por ejecución en el .jsonl");
+  const fila = JSON.parse(jsonl[1]);
+  assert.strictEqual(fila.name, "Estructurada");
+  assert.deepStrictEqual(fila.data, { resumen: "Dos pendientes", pendientes: 2 });
+  assert.ok(!isNaN(Date.parse(fila.at)), "cada línea lleva fecha ISO");
+  ok("esquema JSON: salida estructurada en .md y .jsonl");
+
   // --- remove -------------------------------------------------------------
   const quedan = scheduler.remove(task.id);
   assert.ok(!quedan.some((t) => t.id === task.id), "la tarea se eliminó");

@@ -5,6 +5,18 @@ module.exports = async ({ page, check, sleep, ACT }) => {
   check("clave de API tomada del entorno", (await page.evaluate(() => window.agente.apiKeyStatus())).source === "env" && (await page.textContent("#cfg-key-status")).includes("entorno") && (await page.isHidden("#cfg-key-clear")));
   check("memorias cargadas en editor", (await page.inputValue("#mem-edit")).includes("## Memoria"));
   check("tareas programadas montadas", (await page.$eval("#cfg-schedules", (e) => e.children.length)) > 0);
+  // Tarea programada con esquema JSON desde el formulario (sin ejecutarla: eso gasta tokens).
+  await page.click('#cfg-schedules [data-act="new"]'); await sleep(300);
+  await page.fill("#sch-name", "Conteo"); await page.fill("#sch-prompt", "Cuenta los archivos.");
+  await page.fill("#sch-schema", '{"type":"object","properties":{"total":{"type":"integer"}},"required":["total"]}');
+  await page.click('#cfg-schedules [data-act="save"]'); await sleep(500);
+  const tasks = await page.evaluate(() => window.agente.scheduleList());
+  const t = tasks.find((x) => x.name === "Conteo");
+  check("tarea con esquema guardada", !!t && t.schema?.properties?.total?.type === "integer" && (await page.textContent("#cfg-schedules")).includes("Salida estructurada"), JSON.stringify(t?.schema));
+  check("tarea lista con botón Ejecutar ahora", (await page.$$('#cfg-schedules [data-act="run"]')).length === 1);
+  page.once("dialog", (d) => d.accept());
+  await page.click('#cfg-schedules [data-act="del"]'); await sleep(400);
+  check("tarea eliminada", (await page.evaluate(() => window.agente.scheduleList())).length === 0);
   check("interruptores de subagentes y hooks activos por defecto", (await page.$$('[data-cfg="agents"].on, [data-cfg="hooks"].on')).length === 2);
   await page.click('[data-cfg="agents"]'); await sleep(300);
   check("desactivar subagentes se guarda", (await page.evaluate(async () => (await window.agente.getState()).config)).agents === false);
