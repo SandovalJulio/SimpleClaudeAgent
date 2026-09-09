@@ -13,19 +13,25 @@ líneas, se divide. Toda la UI y los comentarios están en español.
 
 ```bash
 npm start                    # arranca la app (no hay compilación; cerrar y relanzar para cambios en main/)
-npm test                     # prueba de UI sobre el Electron real, sin gastar tokens (~30 comprobaciones)
-UI_TEST_LIVE=1 npm test      # además consultas reales con Haiku: permiso interactivo, rewind, historial (centavos)
-node test/scheduler.test.js  # prueba unitaria del planificador
+npm test                     # prueba de UI sobre el Electron real, sin gastar tokens (~46 comprobaciones, por áreas)
+UI_TEST_LIVE=1 npm test      # además el área live con Haiku: permiso, rewind, hooks, compactar, subagente (centavos)
+npm test -- conexiones live  # solo esas áreas (test/ui/<área>.js; arranque siempre corre)
+node test/scheduler.test.js  # planificador; también test/hooks.test.js y test/seed.test.js (sin SDK)
 node --check <archivo.js>    # verificación de sintaxis (no hay linter configurado)
 ```
 
-- Requiere `.env` con `ANTHROPIC_API_KEY` junto a `main.js` (cargado con `process.loadEnvFile`).
+- Clave de API: en desarrollo, `.env` con `ANTHROPIC_API_KEY` junto a `main.js` (`process.loadEnvFile`); si no
+  hay, la app muestra la bienvenida (`renderer/welcome.js`) y guarda la clave cifrada en `config.json`
+  (`cfg.loadApiKey()` la pone en `process.env` antes de crear conversaciones). `AGENTE_SIN_CLAVE=1` simula la
+  primera ejecución. La app instalada no usa `.env`.
 - En esta shell suele existir `ELECTRON_RUN_AS_NODE`; para lanzar Electron a mano hay que quitarla:
   `env -u ELECTRON_RUN_AS_NODE npx electron .`. Con `--enable-logging=stderr` se ven los errores del renderer.
 - `AGENTE_USER_DATA=<dir>` redirige `userData` (config.json) para no tocar la configuración real. La prueba lo usa.
 - Con la app abierta: `Ctrl+R` recarga el renderer (cierra las conversaciones abiertas), `Ctrl+Shift+I` DevTools.
 - La prueba de UI se conecta al Electron real por CDP con `playwright-core` (`--remote-debugging-port`),
-  puerto aleatorio, y mata el árbol de procesos al terminar. No abre navegadores propios.
+  puerto aleatorio, y mata el árbol de procesos al terminar. No abre navegadores propios. `test/ui.js` es el
+  runner; cada área es un módulo `test/ui/<área>.js` que recibe `{ page, check, sleep, WS, ACT }`; una
+  excepción en un área no detiene las demás.
 
 ## Arquitectura
 
@@ -55,9 +61,23 @@ instrucción del `SYSTEM_APPEND` en `memory.js`. El perfil sin tokens (`.claude/
 mantiene `agent.js` contando extensiones y herramientas, y se resume en el system prompt.
 "Obtener sugerencia" solo aparece con `SUGGEST_MIN` (5) viñetas entre ambas secciones.
 
+**Subagentes y hooks**: `src/main/agents.js` define `lector` (Haiku, solo lectura) y `redactor` y el texto
+`AGENTS_APPEND` de delegación; `buildOptions` los añade con `config.agents` (y la herramienta `Agent`). Los
+mensajes con `parent_tool_use_id` vienen de un subagente: `conv:tool` lleva `parent` y `agent`, y `chat.js`
+pinta el paso sangrado (`.step.sub`). Los subagentes corren en segundo plano: sus pasos pueden llegar tras
+el `result` del turno. `src/main/hooks.js` (`config.hooks`): PreToolUse deniega escrituras fuera de la
+carpeta y de `dirs` y emite `conv:notice`; PostToolUse anota `.claude/cambios.log`. Bash no pasa por ahí.
+
+**Compactar**: `agent.compact(convId)` encola el mensaje de usuario `/compact` (el CLI lo procesa como
+comando). Llegan `system/status` (`compacting`, `compact_result`) y `system/compact_boundary`; con pocos
+turnos el SDK responde "Not enough messages to compact" y la app avisa. Los eventos de límite de tasa
+(`rate_limit_event`) y los reintentos (`system/api_retry`) se traducen a `conv:status` para la barra de estado.
+
 **Sesiones/historial**: `listSessions({dir})` del SDK. Con rutas cortas de Windows (`JULIOC~1`) no
 casa por `dir`; hay un respaldo que filtra por `cwd`. El renderer oculta las sesiones que ya están
-abiertas como conversación.
+abiertas como conversación. Nombre y fijado se guardan en `config.convMeta[sessionId]` (`conv:meta`), se
+fusionan en `sessions:list` (fijadas primero) y se aplican al reanudar; una conversación renombrada antes
+de su primer turno se persiste al llegar `conv:init`.
 
 **Conexiones MCP** (`config.CONNECTIONS`) se lanzan con `cmd /c npx -y <pkg>` en Windows; sus
 herramientas se permiten con el prefijo `mcp__<id>`. `sessions:list` y el SDK también cargan los
@@ -86,9 +106,16 @@ paquete `diff`. El rewind real lo hace el SDK con sus checkpoints; las instantá
 en `env`/`headers`. GitHub es un servidor MCP HTTP remoto; el resto son paquetes npx.
 
 **Empaquetado**: `npm run dist` (electron-builder, NSIS). El binario del CLI del SDK va en
-`asarUnpack`. Ver `docs/EMPAQUETADO.md`. `publish.owner` es un placeholder hasta que exista el repo.
+`asarUnpack`; `build/skills-ejemplo/**` se incluye y `memory.seedExampleSkills` lo copia a la carpeta por
+defecto solo la primera vez (`config.skillsSeeded`; no en pruebas con `AGENTE_USER_DATA`). Ver
+`docs/EMPAQUETADO.md`. `publish.owner` es un placeholder hasta que exista el repo.
 
 ## Trampas conocidas
+- Si la app (o `npm test`) se lanza desde una terminal de Claude Code hereda `CLAUDECODE` y `CLAUDE_CODE_*`;
+  el CLI del SDK se comporta como sesión hija, usa el login OAuth del padre e **ignora `ANTHROPIC_API_KEY`**
+  (`apiKeySource: "none"`). `agent.cleanEnv()` las quita en cada `query()`; el test también las quita al lanzar.
+- Con una clave inválida el CLI reintenta el 401 diez veces con espera creciente (minutos). `validateApiKey`
+  aborta al primer `system/api_retry` de autenticación.
 - `prompt()`, `alert()` y compañía no existen en el renderer de Electron (`prompt() is not supported`).
   El renombrado usa edición en línea (`contenteditable`); los ítems de conversación son `div`, no
   `button`, porque el texto dentro de un `<button>` no es editable. `renderConvList` no repinta

@@ -4,8 +4,8 @@ Un agente de escritorio para Windows, macOS y Linux construido sobre el **Claude
 una interfaz al estilo de Claude Cowork. Elige una carpeta, describe la tarea y el agente lee,
 escribe, ejecuta comandos, crea **skills** reutilizables y **recuerda tus correcciones**.
 
-El proyecto es deliberadamente pequeño: **~3 600 líneas en total, sin frameworks, sin bundler,
-sin TypeScript, sin base de datos**. Todo lo difícil (el bucle del agente, las herramientas, los
+El proyecto es deliberadamente pequeño: **~5 100 líneas en total (pruebas incluidas), sin frameworks, sin
+bundler, sin TypeScript, sin base de datos**. Todo lo difícil (el bucle del agente, las herramientas, los
 permisos, las sesiones, los checkpoints de archivos, MCP) lo aporta el SDK. La app solo pone una
 ventana, un puente IPC y una interfaz.
 
@@ -44,7 +44,8 @@ ventana, un puente IPC y una interfaz.
 | Un módulo por responsabilidad | Ningún archivo pasa de ~600 líneas. Los contratos están en `docs/ARQUITECTURA.md`. |
 | Configuración en un JSON | `config.json` en la carpeta de datos del usuario. Borrarlo devuelve la app al estado inicial. |
 
-Dependencias de ejecución: `@anthropic-ai/claude-agent-sdk` y `marked`. Nada más.
+Dependencias de ejecución: `@anthropic-ai/claude-agent-sdk`, `marked`, `diff` (vista de cambios) y
+`electron-updater` (actualizaciones del instalador). Nada más.
 
 ## Instalación
 
@@ -60,17 +61,17 @@ cd agente
 npm install
 ```
 
-Crea un archivo `.env` junto a `main.js`:
-
-```
-ANTHROPIC_API_KEY=sk-ant-...
-```
-
 Arranca:
 
 ```bash
 npm start
 ```
+
+La primera vez, la app pide la clave de API en una pantalla de bienvenida, la comprueba con una
+consulta mínima (Haiku, menos de un centavo) y la guarda **cifrada** en su configuración. Como
+alternativa para desarrollo puedes crear un `.env` junto a `main.js` con `ANTHROPIC_API_KEY=sk-ant-...`
+o definir esa variable de entorno; la clave guardada tiene prioridad. Se cambia o borra en
+**Configuración › Clave de API**.
 
 No hay paso de compilación. Para ver cambios en el proceso principal, cierra la app y vuelve a
 ejecutar `npm start`. Con la app abierta, `Ctrl+R` recarga la interfaz y `Ctrl+Shift+I` abre las
@@ -78,12 +79,14 @@ herramientas de desarrollo.
 
 ## Primer uso
 
-1. La app arranca con la carpeta `Documentos\Agente` como espacio de trabajo. Cámbiala desde la
-   barra lateral si quieres trabajar sobre otra.
-2. Escribe una tarea o pulsa una tarjeta de inicio.
-3. Para crear tu primera skill, pulsa **Crear una skill**, pon un nombre y describe los pasos.
+1. Introduce tu clave de API en la pantalla de bienvenida (solo la primera vez).
+2. La app arranca con la carpeta `Documentos\Agente` como espacio de trabajo y copia ahí dos skills
+   de ejemplo (`/resumir-documento` y `/ordenar-carpeta`). Cámbiala desde la barra lateral si quieres
+   trabajar sobre otra.
+3. Escribe una tarea o pulsa una tarjeta de inicio.
+4. Para crear tu primera skill, pulsa **Crear una skill**, pon un nombre y describe los pasos.
    Aparecerá en la barra lateral y podrás invocarla con `/nombre`.
-4. Corrige al agente cuando haga algo que no te guste. Lo guardará en la memoria de la carpeta y lo
+5. Corrige al agente cuando haga algo que no te guste. Lo guardará en la memoria de la carpeta y lo
    aplicará en las siguientes conversaciones.
 
 ## Funciones
@@ -93,11 +96,16 @@ herramientas de desarrollo.
   lateral las lista con un indicador de actividad.
 - **Historial** con búsqueda. Sesiones anteriores de la carpeta. Clic para continuar donde lo
   dejaste; clic derecho para bifurcar una copia sin tocar la original.
-- **Renombrar** (doble clic en el título) y **fijar** (clic derecho o 📌) conversaciones.
+- **Renombrar** (doble clic en el título) y **fijar** (clic derecho o 📌) conversaciones. Nombre y
+  fijado se guardan por sesión y se aplican en el historial y al reanudar.
+- **Menú ⋯** de la conversación: renombrar, fijar, **compactar** (resume el contexto anterior con el
+  comando `/compact` del SDK para ahorrar tokens) y cerrar.
 - **Exportar** la conversación a Markdown desde la barra superior.
 - **Streaming** de texto y **resumen de progreso** mientras el agente trabaja.
 - **Línea de actividad** plegable con cada herramienta usada, el archivo o comando afectado y su
-  resultado.
+  resultado. Los pasos que ejecuta un **subagente** aparecen sangrados con su nombre.
+- **Barra de estado** con avisos legibles del SDK: límite de uso alcanzado o cercano, reintentos por
+  errores de red o de la API, compactación en curso.
 - **Sugerencias de siguiente mensaje** al final de cada respuesta.
 - **Detener** la respuesta en curso.
 
@@ -156,6 +164,8 @@ description: Convierte todos los PNG de la carpeta en un único PDF ordenado por
   también borre los PNG originales").
 - Se invocan con `/nombre` o en lenguaje natural: el modelo elige por la `description`.
 - Las de `~/.claude/skills/` son globales y valen para cualquier carpeta.
+- Dos skills de ejemplo (`build/skills-ejemplo/`) se copian a la carpeta por defecto la primera vez que
+  arranca la app; puedes editarlas o borrarlas, no se vuelven a copiar.
 - Si la skill tiene bugs, el agente la corrige él mismo cuando le señalas el error.
 
 ## Memoria y perfil
@@ -180,6 +190,28 @@ El agente mantiene `<carpeta>/CLAUDE.md`, que el SDK carga automáticamente en c
 - Cuando hay al menos cinco memorias, la pantalla de inicio ofrece **Obtener sugerencia**: uno o
   dos consejos concretos sobre nuevas skills o formas de ser más productivo, basados en lo que sabe
   de ti.
+
+## Subagentes y hooks
+
+Dos subagentes vienen definidos con la opción `agents` del SDK (`src/main/agents.js`) y se activan o
+desactivan en **Configuración › Herramientas › Subagentes**:
+
+| Subagente | Modelo | Herramientas | Para qué |
+|---|---|---|---|
+| `lector` | Haiku | Read, Glob, Grep | Explorar y resumir muchos archivos o documentos largos sin gastar el modelo principal. |
+| `redactor` | El principal | Read, Glob, Grep, Write, Edit | Escribir documentos o archivos largos con instrucciones ya claras. |
+
+El system prompt le dice al agente cuándo delegar (lecturas amplias, redacciones largas) y cuándo no
+(tareas cortas). Sus pasos se ven en la línea de actividad marcados con `↳ lector` o `↳ redactor`.
+
+Dos hooks del SDK (`src/main/hooks.js`, interruptor **Protección y registro de escrituras**):
+
+- **PreToolUse** sobre Write, Edit, MultiEdit y NotebookEdit: si la ruta queda fuera de la carpeta de
+  trabajo y de los directorios adicionales, deniega la escritura y deja un aviso en el hilo.
+- **PostToolUse** sobre las mismas herramientas: añade una línea a `<carpeta>/.claude/cambios.log`
+  con fecha ISO, herramienta y ruta relativa (y el subagente, si lo hubo).
+
+El hook no cubre escrituras hechas con comandos de Bash; para eso están los modos de permisos.
 
 ## Artifacts
 
@@ -226,15 +258,17 @@ autenticación o conectando. Para añadir otra, edita `CONNECTIONS` en `src/main
 | Sección | Opciones |
 |---|---|
 | General | Cómo quieres que el agente te llame. |
+| Clave de API | Estado (guardada cifrada, del entorno o ausente), cambiarla o borrarla. |
 | Memorias | Editor del `CLAUDE.md` de la carpeta, con resumen de entradas y archivos más usados. |
 | Preferencias | Apariencia (sistema, claro, oscuro), fuente del chat, notificaciones. |
 | Límites | Tope de gasto en USD y máximo de turnos por conversación. |
-| Herramientas | Búsqueda web (WebSearch y WebFetch), sandbox para comandos, directorios adicionales, plugins locales de Claude Code. |
+| Herramientas | Búsqueda web (WebSearch y WebFetch), sandbox para comandos, subagentes, protección y registro de escrituras, directorios adicionales, plugins locales de Claude Code. |
 | Conexiones | Interruptores de los servidores MCP. |
 | Tareas programadas | Lista y formulario. |
 
 La configuración se guarda en `config.json` dentro de la carpeta de datos del usuario
-(`%APPDATA%\agente-escritorio` en Windows).
+(`%APPDATA%\agente-escritorio` en Windows). La clave de API y las credenciales de conexiones van
+cifradas con `safeStorage`; el nombre y fijado de conversaciones, en `convMeta` por sesión.
 
 ## Costos
 
@@ -254,18 +288,21 @@ $0.03.
 ## Estructura del código
 
 ```
-main.js                  Ventana, atajos, notificaciones, registro de IPC (≈100 líneas)
+main.js                  Ventana, atajos, notificaciones, registro de IPC (≈120 líneas)
 preload.js               Expone window.agente al renderer
 src/main/
-  config.js              Configuración persistente, carpeta, catálogos (modelos, permisos, conexiones)
-  memory.js              Skills, CLAUDE.md, perfil sin tokens, system prompt adicional
-  agent.js               Conversaciones (streaming-input), permisos, rewind, sesiones, runOnce
+  config.js              Configuración persistente, clave de API cifrada, carpeta, catálogos, convMeta
+  memory.js              Skills (y las de ejemplo), CLAUDE.md, perfil sin tokens, system prompt adicional
+  agent.js               Conversaciones (streaming-input), permisos, rewind, sesiones, compactar, runOnce
+  agents.js              Subagentes lector y redactor e instrucciones de delegación
+  hooks.js               Hooks: bloquear escrituras fuera de la carpeta y registrar cambios
   scheduler.js           Tareas programadas
 renderer/
   index.html             Marcado base y orden de carga
   styles.css             Tokens, layout, chat, compositor, configuración
   app.js                 Estado global, utilidades, bus interno, tema
-  chat.js                Conversaciones en paralelo, mensajes, actividad, costo, historial
+  welcome.js             Pantalla de bienvenida (clave de API)
+  chat.js                Conversaciones en paralelo, mensajes, actividad, avisos, menú ⋯, historial
   composer.js            Adjuntos, arrastrar y soltar, dictado, menú /, píldoras
   settings.js            Modal de configuración
   dialogs.js             Tarjetas de permiso, preguntas, plan y elicitación
@@ -273,8 +310,8 @@ renderer/
   schedules.js           Sección de tareas programadas
 docs/ARQUITECTURA.md     Contratos IPC y eventos entre main y renderer
 docs/EMPAQUETADO.md      Instalador, icono, actualizaciones
-build/                   icon.png / icon.svg
-test/                    ui.js (prueba real sobre Electron), scheduler.test.js, demos
+build/                   icon.png / icon.svg, skills-ejemplo/ (se empaquetan)
+test/                    ui.js + ui/<área>.js (prueba real sobre Electron), scheduler, hooks y seed .test.js, demos
 ```
 
 Cómo fluye un mensaje: el compositor llama a `convSend` → `agent.js` lo encola en la query del SDK
@@ -291,8 +328,8 @@ Ideas que encajan en la arquitectura actual con poco código:
   `env` al resultado de `mcpServerFor`.
 - **Nuevo tipo de diálogo**: emite `conv:ask` con otro `kind` desde `agent.js` y añade su tarjeta
   en `dialogs.js`.
-- **Subagentes especializados**: opción `agents` del SDK en `buildOptions`.
-- **Hooks** (registro, bloqueo de rutas): opción `hooks` del SDK en `buildOptions`.
+- **Otro subagente**: una entrada más en `AGENTS` (`src/main/agents.js`) y una línea en `AGENTS_APPEND`.
+- **Otro hook** (por ejemplo, avisar antes de un `git push`): un matcher más en `buildHooks` (`src/main/hooks.js`).
 
 Lo que no está y sería un cambio mayor: conexiones con OAuth interactivo (Google Drive), ejecución
 remota, y sincronización de memoria entre equipos.
@@ -300,15 +337,21 @@ remota, y sincronización de memoria entre equipos.
 ## Pruebas
 
 ```bash
-npm test                     # abre el Electron real y pulsa cada control; ~30 comprobaciones; sin tokens
-UI_TEST_LIVE=1 npm test      # además, con Haiku: permiso interactivo, archivo creado, ver cambios,
-                             # revertir, sugerencia, historial y reanudar sesión (unos centavos)
-node test/scheduler.test.js  # planificador
+npm test                        # abre el Electron real y pulsa cada control; ~46 comprobaciones; sin tokens
+UI_TEST_LIVE=1 npm test         # además el área "live" con Haiku: permiso interactivo, archivo creado, ver
+                                # cambios, revertir, hook de registro, sugerencia, compactar, historial con
+                                # nombre persistido, hook de bloqueo y subagente (unos centavos)
+npm test -- conversaciones live # solo esas áreas (arranque siempre corre)
+node test/scheduler.test.js     # planificador
+node test/hooks.test.js         # hooks de bloqueo y registro (sin SDK)
+node test/seed.test.js          # copia de las skills de ejemplo
 ```
 
-La prueba de UI se conecta al Electron real por el protocolo de depuración de Chromium con
-`playwright-core`, usa una carpeta de trabajo y una carpeta de datos temporales, y cierra todos los
-procesos al terminar. No altera tu configuración.
+La prueba de UI (`test/ui.js`) se conecta al Electron real por el protocolo de depuración de Chromium
+con `playwright-core`, usa una carpeta de trabajo y una carpeta de datos temporales, y cierra todos los
+procesos al terminar. Está dividida por áreas (`test/ui/<área>.js`: arranque, compositor,
+conversaciones, configuración, conexiones, live): una excepción en un área no impide las demás y al
+final se imprime un resumen por área. No altera tu configuración.
 
 ## Limitaciones conocidas
 
@@ -318,6 +361,11 @@ procesos al terminar. No altera tu configuración.
 - **Sandbox** de comandos: depende del sistema. En Windows nativo requiere que el SDK tenga sus
   dependencias de aislamiento; si no, los comandos se ejecutan sin aislar y se avisa.
 - **Tareas programadas** solo corren con la app abierta.
+- **Compactar** requiere una conversación con varios turnos; con pocas, el SDK responde que aún es
+  demasiado corta y la app lo indica.
+- Los **hooks** de protección solo ven las herramientas de edición del SDK, no los comandos de Bash.
+- Si lanzas la app **desde una terminal de Claude Code**, hereda variables `CLAUDE_CODE_*`; la app las
+  limpia para que el CLI del SDK use tu clave y no la sesión del padre.
 - Las conexiones MCP de tu instalación de Claude Code (`~/.claude`) también se cargan y aparecen
   como "needs-auth"; no afecta a la app, pero se ven en los registros.
 
