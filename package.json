@@ -42,6 +42,7 @@
       "!docs/**",
       "!build/**",
       "build/skills-ejemplo/**",
+      "build/icon.png",
       "!.env"
     ],
     "directories": {

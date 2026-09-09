@@ -4,27 +4,29 @@
   const root = $("settings-root");
   root.innerHTML = `
   <div id="overlay" class="overlay">
-    <div class="modal" role="dialog" aria-modal="true">
-      <div class="modal-head"><h2>Configuración</h2><button id="close-config" class="ib" title="Cerrar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+    <div class="modal cfg" role="dialog" aria-modal="true">
+      <nav class="cfg-nav">
+        <h2>Configuración</h2>
+        <button class="nav-item active" data-pane="general">General</button>
+        <button class="nav-item" data-pane="memorias">Memorias</button>
+        <button class="nav-item" data-pane="skills">Skills</button>
+        <button class="nav-item" data-pane="herramientas">Herramientas</button>
+        <button class="nav-item" data-pane="conexiones">Conexiones</button>
+        <button class="nav-item" data-pane="tareas">Tareas programadas</button>
+      </nav>
+      <div class="cfg-main">
+      <div class="modal-head"><h2 id="cfg-title">General</h2><button id="close-config" class="ib" title="Cerrar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
       <div class="modal-body">
-        <div class="cfg-section"><div class="row"><div class="lbl"><b>¿Cómo quieres que el agente te llame?</b></div><input id="cfg-name" class="field" placeholder="Tu nombre" /></div></div>
-
-        <div class="cfg-section">
+      <div class="cfg-pane" data-pane="general">
+        <div class="cfg-section"><div class="row"><div class="lbl"><b>¿Cómo quieres que el agente te llame?</b></div><input id="cfg-name" class="field" placeholder="Tu nombre" /></div>
+          <div class="row"><div class="lbl"><b>Gasto de esta sesión</b><span>Suma del costo que reporta el SDK por cada respuesta desde que abriste la app.</span></div><b id="cost" class="mono">$0.0000</b></div></div>
+<div class="cfg-section">
           <h3>Clave de API</h3>
           <div class="row"><div class="lbl"><b>Clave de API de Anthropic</b><span id="cfg-key-status"></span>
             <div class="cred"><div class="credrow"><input id="cfg-key" class="field" type="password" placeholder="sk-ant-…" autocomplete="off" spellcheck="false" /><button id="cfg-key-save" class="btn ghost">Guardar</button><button id="cfg-key-clear" class="btn ghost">Borrar</button></div>
             <span class="help">Se comprueba con una consulta mínima y se guarda cifrada en este equipo. Nunca se muestra en la interfaz.</span></div></div></div>
         </div>
-
-        <div class="cfg-section">
-          <h3>Memorias</h3>
-          <p class="desc">Lo que el agente ha aprendido de ti: correcciones, preferencias y perfil. Se guarda en <code id="mem-file">CLAUDE.md</code> de la carpeta de trabajo y se aplica en cada conversación. Puedes editarlo libremente.</p>
-          <div id="mem-summary" class="mem-summary"></div>
-          <textarea id="mem-edit" class="mem-edit" spellcheck="false"></textarea>
-          <div class="mem-actions"><button id="mem-save" class="btn primary">Guardar memorias</button><button id="mem-reload" class="btn">Recargar</button><span id="mem-status"></span></div>
-        </div>
-
-        <div class="cfg-section">
+<div class="cfg-section">
           <h3>Preferencias</h3>
           <div class="row"><div class="lbl"><b>Apariencia</b></div>
             <div class="seg2" id="theme-seg">
@@ -35,14 +37,31 @@
           <div class="row"><div class="lbl"><b>Fuente del chat</b></div><select id="cfg-font" class="field"><option value="sans">Sistema</option><option value="serif">Serif</option><option value="mono">Monoespaciada</option></select></div>
           <div class="row"><div class="lbl"><b>Notificaciones del sistema</b><span>Aviso al terminar una respuesta cuando la app no está delante.</span></div><button class="switch" data-cfg="notifications"></button></div>
         </div>
-
+      </div>
+      <div class="cfg-pane" data-pane="memorias">
+<div class="cfg-section">
+          <h3>Memorias</h3>
+          <p class="desc">Lo que el agente ha aprendido de ti: correcciones, preferencias y perfil. Se guarda en <code id="mem-file">CLAUDE.md</code> de la carpeta de trabajo y se aplica en cada conversación. Puedes editarlo libremente.</p>
+          <div id="mem-summary" class="mem-summary"></div>
+          <textarea id="mem-edit" class="mem-edit" spellcheck="false"></textarea>
+          <div class="mem-actions"><button id="mem-save" class="btn primary">Guardar memorias</button><button id="mem-reload" class="btn">Recargar</button><span id="mem-status"></span></div>
+        </div>
+      </div>
+      <div class="cfg-pane" data-pane="skills">
         <div class="cfg-section">
+          <h3>Skills <span class="cnt" id="skills-cnt"></span></h3>
+          <p class="desc">Workflows reutilizables en <code>.claude/skills/&lt;nombre&gt;/SKILL.md</code> de la carpeta de trabajo (y globales en <code>~/.claude/skills</code>). Se invocan con <code>/nombre</code> en el compositor. Clic: insertar en el mensaje · Clic derecho: abrir el archivo.</p>
+          <div class="mem-actions"><button id="refresh" class="btn">Actualizar</button><button id="skills-new" class="btn primary">Crear una skill</button></div>
+          <div id="skills" class="list skills-list"><div class="empty">Cargando…</div></div>
+        </div>
+      </div>
+      <div class="cfg-pane" data-pane="herramientas">
+<div class="cfg-section">
           <h3>Límites por conversación</h3>
           <div class="row"><div class="lbl"><b>Tope de gasto (USD)</b><span>0 = sin límite. El agente se detiene al alcanzarlo.</span></div><input id="cfg-budget" class="field num" type="number" min="0" step="0.5" /></div>
           <div class="row"><div class="lbl"><b>Máximo de turnos</b><span>0 = sin límite. Pasos herramienta-respuesta por mensaje.</span></div><input id="cfg-turns" class="field num" type="number" min="0" step="1" /></div>
         </div>
-
-        <div class="cfg-section">
+<div class="cfg-section">
           <h3>Herramientas</h3>
           <div class="row"><div class="lbl"><b>Búsqueda web</b><span>Herramientas WebSearch y WebFetch del SDK.</span></div><button class="switch" data-cfg="web"></button></div>
           <div class="row"><div class="lbl"><b>Sandbox para comandos</b><span>Aísla los comandos Bash del resto del sistema. Si el sistema no lo soporta, se ejecutan sin aislar.</span></div><button class="switch" data-cfg="sandbox"></button></div>
@@ -51,24 +70,39 @@
           <div class="row"><div class="lbl"><b>Directorios adicionales</b><span>Otras carpetas a las que el agente puede acceder además de la de trabajo.</span><div id="cfg-dirs" class="paths"></div></div><button id="add-dir" class="btn">Añadir</button></div>
           <div class="row"><div class="lbl"><b>Plugins</b><span>Carpetas de plugins locales de Claude Code (skills, comandos y agentes de terceros).</span><div id="cfg-plugins" class="paths"></div></div><button id="add-plugin" class="btn">Añadir</button></div>
         </div>
-
-        <div class="cfg-section">
+      </div>
+      <div class="cfg-pane" data-pane="conexiones">
+<div class="cfg-section">
           <h3>Conexiones</h3>
           <p class="desc">Herramientas externas que el agente puede usar. Las tres primeras no requieren claves. GitHub, Notion, Slack y Brave necesitan un token, que se guarda cifrado en este equipo y nunca se muestra en la interfaz. Las de <code>npx</code> se descargan la primera vez.</p>
           <div id="cfg-connections"></div>
         </div>
-
-        <div class="cfg-section">
+      </div>
+      <div class="cfg-pane" data-pane="tareas">
+<div class="cfg-section">
           <h3>Tareas programadas</h3>
           <p class="desc">Ejecuta un mensaje o skill de forma periódica en la carpeta de trabajo. El resultado se guarda en <code>.claude/programadas/</code> y se notifica.</p>
           <div id="cfg-schedules"></div>
         </div>
       </div>
+      </div>
+      </div>
     </div>
   </div>`;
 
   const overlay = $("overlay");
-  async function open() {
+  const PANE_TITLE = { general: "General", memorias: "Memorias", skills: "Skills", herramientas: "Herramientas", conexiones: "Conexiones", tareas: "Tareas programadas" };
+  function showPane(name) {
+    root.querySelectorAll(".cfg-pane").forEach((p) => (p.hidden = p.dataset.pane !== name));
+    root.querySelectorAll(".nav-item").forEach((b) => b.classList.toggle("active", b.dataset.pane === name));
+    $("cfg-title").textContent = PANE_TITLE[name] || name;
+    root.querySelector(".modal-body").scrollTop = 0;
+  }
+  root.querySelectorAll(".nav-item").forEach((b) => (b.onclick = () => showPane(b.dataset.pane)));
+  showPane("general");
+  $("skills-new").onclick = () => { close(); window.App.emit("chip:create"); };
+  async function open(pane) {
+    showPane(typeof pane === "string" ? pane : "general");
     const s = await window.agente.getState();
     state.config = s.config;
     $("cfg-name").value = state.config.name || "";

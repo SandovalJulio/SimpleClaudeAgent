@@ -83,7 +83,12 @@ de su primer turno se persiste al llegar `conv:init`.
 herramientas se permiten con el prefijo `mcp__<id>`. `sessions:list` y el SDK también cargan los
 servidores MCP del usuario de `~/.claude` (aparecen como `needs-auth`); no es un error.
 
-**Renderer**: `app.js` define `window.App` (estado, `$`, `esc`, popover único `#menu`, bus interno
+**Renderer**: la barra lateral solo tiene "Nueva conversación", la lista de conversaciones abiertas y las
+anteriores (historial con búsqueda) y "Configuración"; la carpeta de trabajo es la píldora `#ws-pill` de la
+barra superior (menú con ruta, cambiar, abrir) y las skills se listan en Configuración › Skills (`#skills`,
+lo pinta `app.js`). Configuración (`settings.js`) es un modal con `nav.cfg-nav` y paneles `.cfg-pane[data-pane]`;
+`Settings.open(pane?)` abre en "general" por defecto. El indicador de estado (`#status-text`) está oculto
+salvo avisos del SDK (`conv:status`). `app.js` define `window.App` (estado, `$`, `esc`, popover único `#menu`, bus interno
 `on/emit`, toasts, tema). Los módulos se comunican por ese bus (`chip:*`, `composer:set`,
 `conv:activated`, `memory:changed`, `history:refresh`) y por `window.Chat / Composer / Dialogs /
 FilesPanel / SchedulesUI`. Cada conversación tiene su `.thread#conv-<id>` absoluto dentro de

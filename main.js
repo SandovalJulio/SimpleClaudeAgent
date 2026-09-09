@@ -25,6 +25,7 @@ const notify = (title, body) => {
 function createWindow() {
   win = new BrowserWindow({
     width: 1280, height: 820, minWidth: 960, minHeight: 620, title: "Agente", backgroundColor: "#f4f4f5",
+    icon: path.join(__dirname, "build", "icon.png"), // icono de ventana y barra de tareas (el instalador usa el mismo)
     webPreferences: { preload: path.join(__dirname, "preload.js") },
   });
   win.loadFile(path.join(__dirname, "renderer", "index.html"));

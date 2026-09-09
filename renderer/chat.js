@@ -53,14 +53,17 @@
     renderConvList();
     emit("conv:activated", { convId });
   }
+  // El indicador "Listo / Trabajando" no se muestra; solo aparece con avisos del SDK (statusNotice).
   function setStatus(busy) {
     $("status-text").textContent = busy ? "Trabajando…" : "Listo";
     $("status-dot").className = "dot" + (busy ? " busy" : "");
+    $("status-text").hidden = $("status-dot").hidden = true;
   }
   // Avisos del SDK en la barra de estado (límite de uso, reintentos de red, compactación). Se borran al cambiar de estado.
   function statusNotice(conv, { kind, text }) {
     if (conv.id !== state.activeConv) return;
     $("status-text").textContent = text;
+    $("status-text").hidden = $("status-dot").hidden = false;
     $("status-dot").className = "dot " + (kind === "rate" ? "warn" : kind === "retry" ? "warn busy" : "busy");
     $("status-text").title = text;
   }
@@ -123,22 +126,19 @@
   }
   $("crumb-title").ondblclick = () => { const c = active(); if (c) renameConv(c); };
 
-  // Menú ⋯ de la conversación activa: renombrar, fijar, compactar (comando /compact del SDK), cerrar.
+  // Menú ⋯ de la conversación activa: compactar (comando /compact del SDK) y descargar en Markdown.
+  // Renombrar y fijar se hacen en la lista lateral (doble clic / clic derecho o 📌).
   $("conv-menu").onclick = (e) => {
     const conv = active(); if (!conv) return;
     const menu = $("menu");
     if (menu.classList.contains("open") && window.App.menuAnchor === e.currentTarget) return window.App.closeMenu();
     const item = (act, label, note, disabled) => `<button class="mi" data-act="${act}" ${disabled ? "disabled" : ""}><span class="ml"><b>${label}</b>${note ? `<span>${note}</span>` : ""}</span></button>`;
     window.App.openMenu(e.currentTarget, "conv", `<div class="head">Conversación</div>` +
-      item("rename", "Renombrar", "Doble clic en el título también funciona") +
-      item("pin", conv.pinned ? "Desfijar" : "Fijar", "Las fijadas van primero en la lista y el historial") +
-      item("compact", "Compactar conversación", "Resume el contexto anterior para ahorrar tokens", conv.busy || !conv.sessionId) +
-      item("close", "Cerrar", ""));
+      item("compact", "Compactar", "Resume el contexto anterior para ahorrar tokens", conv.busy || !conv.sessionId) +
+      item("export", "Descargar", "Guarda la conversación en Markdown", !conv.hasMessages));
     menu.querySelectorAll("[data-act]").forEach((b) => (b.onclick = async () => {
       window.App.closeMenu();
-      if (b.dataset.act === "rename") renameConv(conv);
-      if (b.dataset.act === "pin") togglePin(conv);
-      if (b.dataset.act === "close") closeConv(conv.id);
+      if (b.dataset.act === "export") exportConv(conv);
       if (b.dataset.act === "compact") { try { await window.agente.convCompact(conv.id); } catch (err) { toast(err.message.replace(/^.*Error: /, ""), "err"); } }
     }));
   };
@@ -162,12 +162,12 @@
     }
     return out.join("\n");
   }
-  $("export").onclick = async () => {
-    const conv = active(); if (!conv || !conv.hasMessages) return toast("No hay nada que exportar todavía.", "err");
+  async function exportConv(conv) {
+    if (!conv || !conv.hasMessages) return toast("No hay nada que descargar todavía.", "err");
     const name = conv.title.replace(/[^\p{L}\p{N} _-]/gu, "").trim().slice(0, 60) || "conversacion";
     const file = await window.agente.exportSave({ defaultName: name + ".md", text: toMarkdown(conv) });
-    if (file) toast("Exportado: " + window.App.baseName(file), "ok");
-  };
+    if (file) toast("Descargado: " + window.App.baseName(file), "ok");
+  }
   const active = () => state.convs.get(state.activeConv);
   function updateSuggestChip(conv) {
     const ready = !!state.memoryInfo?.suggestReady;

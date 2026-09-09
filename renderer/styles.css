@@ -109,7 +109,7 @@ aside {
 .mem-summary:not(:empty) { margin: 0 0 10px; }
 .empty { font-size: 12.5px; color: var(--text-3); padding: 6px 8px; line-height: 1.5; }
 
-.side-foot { margin-top: auto; display: flex; justify-content: space-between; font-size: 12px; color: var(--text-3); padding: 0 6px; }
+.side-foot { margin-top: auto; display: flex; justify-content: flex-start; font-size: 12px; color: var(--text-3); padding: 0 6px; }
 .side-foot b { color: var(--text-2); font-family: var(--mono); font-weight: 500; }
 
 /* ---------- Main ---------- */
@@ -402,5 +402,28 @@ body.dragging .composer { border-color: var(--accent); border-style: dashed; }
 .step.sub { padding-left: 30px; background: var(--bg-code); }
 .step .agent { font-size: 11px; color: var(--accent); font-weight: 600; flex: none; }
 .dot.warn { background: #d97706; }
-#status-text { max-width: 420px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#status-text { max-width: 420px; font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .menu .mi:disabled { opacity: .5; cursor: default; }
+
+/* Configuración con menú lateral: nav a la izquierda, un panel a la vez */
+.modal.cfg { width: min(900px, 94vw); height: 86vh; flex-direction: row; }
+.cfg-nav { width: 190px; flex: none; background: var(--bg-side); border-right: 1px solid var(--border); padding: 18px 10px; display: flex; flex-direction: column; gap: 2px; }
+.cfg-nav h2 { margin: 0 8px 12px; font-size: 13px; font-weight: 600; color: var(--text-3); letter-spacing: .04em; text-transform: uppercase; }
+.cfg-nav .nav-item { text-align: left; padding: 8px 10px; border-radius: 8px; font-size: 13.5px; color: var(--text-2); }
+.cfg-nav .nav-item:hover { background: var(--bg-hover); color: var(--text); }
+.cfg-nav .nav-item.active { background: var(--bg-card); color: var(--text); font-weight: 600; border: 1px solid var(--border); }
+.cfg-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.cfg-main .modal-body { flex: 1; }
+.cfg-pane .cfg-section:first-child { padding-top: 8px; }
+.skills-list { gap: 6px; margin-top: 12px; }
+.skills-list .skill { background: var(--bg-card); border: 1px solid var(--border); }
+.cfg-section h3 .cnt { font-weight: 500; color: var(--text-3); }
+
+/* Barra lateral plana: botón de nueva conversación sin borde; carpeta como píldora en la barra superior */
+.btn.flat { width: 100%; justify-content: flex-start; background: transparent; border-color: transparent; padding: 8px 10px; font-weight: 500; }
+.btn.flat:hover { background: var(--bg-hover); }
+.crumb { gap: 12px; }
+.crumb .pill { flex: none; max-width: 240px; }
+.crumb .pill #ws-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.menu .ws-path { font-family: var(--mono); font-size: 11.5px; color: var(--text-2); padding: 4px 10px 8px; max-width: 360px; word-break: break-all; }
+.mono { font-family: var(--mono); font-weight: 500; }

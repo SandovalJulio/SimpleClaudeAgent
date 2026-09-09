@@ -1,6 +1,7 @@
 // Área "conexiones": lista de servidores MCP, credencial cifrada sin exponerla, activar y desactivar.
 module.exports = async ({ page, check, sleep }) => {
   await page.click("#open-config"); await sleep(500);
+  await page.click('.cfg-nav [data-pane="conexiones"]'); await sleep(200);
   check("conexiones listadas", (await page.$$("#cfg-connections .switch")).length === 7);
   // Conexión con credencial: no se activa sin token; con token guardado (cifrado) sí, y el renderer no recibe el secreto.
   const gh = (await page.$$("#cfg-connections .row"))[3];

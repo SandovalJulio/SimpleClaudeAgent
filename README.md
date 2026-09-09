@@ -94,13 +94,13 @@ herramientas de desarrollo.
 ### Conversación
 - **Conversaciones en paralelo.** Varias a la vez, cada una con su propio proceso del SDK. La barra
   lateral las lista con un indicador de actividad.
-- **Historial** con búsqueda. Sesiones anteriores de la carpeta. Clic para continuar donde lo
-  dejaste; clic derecho para bifurcar una copia sin tocar la original.
+- **Conversaciones anteriores** con búsqueda, debajo de las abiertas en la misma sección. Clic para
+  continuar donde lo dejaste; clic derecho para bifurcar una copia sin tocar la original.
 - **Renombrar** (doble clic en el título) y **fijar** (clic derecho o 📌) conversaciones. Nombre y
   fijado se guardan por sesión y se aplican en el historial y al reanudar.
-- **Menú ⋯** de la conversación: renombrar, fijar, **compactar** (resume el contexto anterior con el
-  comando `/compact` del SDK para ahorrar tokens) y cerrar.
-- **Exportar** la conversación a Markdown desde la barra superior.
+- **Menú ⋯** de la conversación: **Compactar** (resume el contexto anterior con el comando `/compact`
+  del SDK para ahorrar tokens) y **Descargar** en Markdown.
+- La **carpeta de trabajo** es una píldora junto al título: muestra la ruta y permite cambiarla o abrirla.
 - **Streaming** de texto y **resumen de progreso** mientras el agente trabaja.
 - **Línea de actividad** plegable con cada herramienta usada, el archivo o comando afectado y su
   resultado. Los pasos que ejecuta un **subagente** aparecen sangrados con su nombre.
@@ -255,15 +255,15 @@ autenticación o conectando. Para añadir otra, edita `CONNECTIONS` en `src/main
 
 ## Configuración
 
+La ventana de Configuración tiene un menú lateral con una sección por pestaña:
+
 | Sección | Opciones |
 |---|---|
-| General | Cómo quieres que el agente te llame. |
-| Clave de API | Estado (guardada cifrada, del entorno o ausente), cambiarla o borrarla. |
+| General | Nombre, gasto de la sesión, clave de API (estado, cambiar, borrar), apariencia, fuente, notificaciones. |
 | Memorias | Editor del `CLAUDE.md` de la carpeta, con resumen de entradas y archivos más usados. |
-| Preferencias | Apariencia (sistema, claro, oscuro), fuente del chat, notificaciones. |
-| Límites | Tope de gasto en USD y máximo de turnos por conversación. |
-| Herramientas | Búsqueda web (WebSearch y WebFetch), sandbox para comandos, subagentes, protección y registro de escrituras, directorios adicionales, plugins locales de Claude Code. |
-| Conexiones | Interruptores de los servidores MCP. |
+| Skills | Lista de skills de la carpeta y globales (clic: insertar `/nombre`; clic derecho: abrir el archivo), actualizar y crear. |
+| Herramientas | Límites (tope de gasto y turnos), búsqueda web, sandbox, subagentes, protección y registro de escrituras, directorios adicionales, plugins. |
+| Conexiones | Interruptores y credenciales de los servidores MCP. |
 | Tareas programadas | Lista y formulario. |
 
 La configuración se guarda en `config.json` dentro de la carpeta de datos del usuario
@@ -302,9 +302,9 @@ renderer/
   styles.css             Tokens, layout, chat, compositor, configuración
   app.js                 Estado global, utilidades, bus interno, tema
   welcome.js             Pantalla de bienvenida (clave de API)
-  chat.js                Conversaciones en paralelo, mensajes, actividad, avisos, menú ⋯, historial
+  chat.js                Conversaciones en paralelo, mensajes, actividad, avisos, menú ⋯, conversaciones anteriores
   composer.js            Adjuntos, arrastrar y soltar, dictado, menú /, píldoras
-  settings.js            Modal de configuración
+  settings.js            Configuración: menú lateral con paneles (general, memorias, skills, herramientas, conexiones, tareas)
   dialogs.js             Tarjetas de permiso, preguntas, plan y elicitación
   files.js               Chips de archivos producidos y panel de vista previa
   schedules.js           Sección de tareas programadas

@@ -63,8 +63,7 @@
   function setFolderUI(f) {
     state.folder = f;
     $("ws-label").textContent = f ? baseName(f) : "Sin carpeta";
-    $("ws-path").textContent = f || "";
-    $("crumb-folder").textContent = f ? baseName(f) : "Sin carpeta";
+    $("ws-pill").title = f ? "Carpeta de trabajo: " + f : "Carpeta de trabajo";
     emit("folder:changed", f);
   }
 
@@ -77,7 +76,7 @@
       const b = document.createElement("button");
       b.className = "skill"; b.title = s.file + "\nClic: insertar · Clic derecho: abrir archivo";
       b.innerHTML = `<div class="n">/${esc(s.name)} <span class="tag">${s.scope}</span></div>` + (s.description ? `<div class="d">${esc(s.description)}</div>` : "");
-      b.onclick = () => emit("skill:pick", s.name);
+      b.onclick = () => { window.Settings?.close(); emit("skill:pick", s.name); };
       b.oncontextmenu = (e) => { e.preventDefault(); window.agente.openPath(s.file); };
       box.appendChild(b);
     }
@@ -101,8 +100,15 @@
     setFolderUI(s.folder);
     emit("app:ready");
     refreshSide();
-    $("pick").onclick = async () => { const f = await window.agente.pickFolder(); if (f !== state.folder) { setFolderUI(f); emit("convs:reset"); refreshSide(); } };
-    $("open-ws").onclick = () => state.folder && window.agente.openPath(state.folder);
+    // Píldora de carpeta (barra superior): menú con la ruta, cambiar y abrir.
+    $("ws-pill").onclick = (e) => {
+      if (menu.classList.contains("open") && menuAnchor === e.currentTarget) return closeMenu();
+      openMenu(e.currentTarget, "ws", `<div class="head">Carpeta de trabajo</div><div class="ws-path" id="ws-path">${esc(state.folder || "Sin carpeta")}</div>` +
+        `<button class="mi" data-act="pick"><span class="ml"><b>Cambiar carpeta…</b><span>Cierra las conversaciones abiertas</span></span></button>` +
+        `<button class="mi" data-act="open"><span class="ml"><b>Abrir en el explorador</b></span></button>`);
+      menu.querySelector('[data-act="pick"]').onclick = async () => { closeMenu(); const f = await window.agente.pickFolder(); if (f !== state.folder) { setFolderUI(f); emit("convs:reset"); refreshSide(); } };
+      menu.querySelector('[data-act="open"]').onclick = () => { closeMenu(); if (state.folder) window.agente.openPath(state.folder); };
+    };
     $("refresh").onclick = refreshSide;
   });
 })();

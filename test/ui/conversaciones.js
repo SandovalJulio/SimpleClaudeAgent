@@ -19,13 +19,10 @@ module.exports = async ({ page, check, sleep }) => {
   await page.evaluate(() => window.agente.convMeta({ sessionId: "sesion-prueba", title: "", pinned: false }));
   meta = (await page.evaluate(async () => (await window.agente.getState()).config)).convMeta;
   check("meta vacía se elimina", !("sesion-prueba" in meta));
-  // Menú ⋯ de la conversación: cuatro acciones; compactar deshabilitado sin sesión del SDK.
+  // Menú ⋯ de la conversación: solo Compactar y Descargar, ambos deshabilitados sin sesión ni mensajes.
   await page.click("#conv-menu"); await sleep(250);
-  check("menú de conversación", (await page.$$("#menu [data-act]")).length === 4 && (await page.$eval('#menu [data-act="compact"]', (e) => e.disabled)));
-  const wasPinned = await page.$eval("#convs .conv", (e) => e.classList.contains("pinned"));
-  await page.click('#menu [data-act="pin"]'); await sleep(200);
-  check("fijar/desfijar desde el menú", (await page.$eval("#convs .conv", (e) => e.classList.contains("pinned"))) === !wasPinned);
-  await page.click("#conv-menu"); await sleep(200); await page.click('#menu [data-act="pin"]'); await sleep(200);
+  check("menú de conversación: compactar y descargar", (await page.$$("#menu [data-act]")).length === 2 && (await page.$eval('#menu [data-act="compact"]', (e) => e.disabled)) && (await page.$eval('#menu [data-act="export"]', (e) => e.disabled)));
+  await page.click("#conv-menu"); await sleep(150);
   // Buscar en historial (sin sesiones aún: muestra "Sin coincidencias")
   await page.fill("#history-search", "zzzz"); await sleep(200);
   check("búsqueda en historial filtra", (await page.textContent("#history")).includes("Sin coincidencias"));
