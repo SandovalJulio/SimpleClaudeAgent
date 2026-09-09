@@ -6,7 +6,7 @@
   root.innerHTML = `
   <div id="welcome" class="welcome" hidden>
     <div class="welcome-card" role="dialog" aria-modal="true">
-      <img class="logo" src="logo.svg" alt="" />
+      <img class="logo" src="logo.png" alt="" />
       <h1>Bienvenido a Agente</h1>
       <p>Para empezar hace falta una clave de API de Anthropic. Se guarda <b>cifrada en este equipo</b> y solo se usa para hablar con la API.</p>
       <input id="welcome-key" class="field" type="password" placeholder="sk-ant-…" autocomplete="off" spellcheck="false" />
