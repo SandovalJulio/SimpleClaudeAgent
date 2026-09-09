@@ -30,7 +30,9 @@ Ese binario **no puede ejecutarse desde dentro del asar**, por eso `build.asarUn
 
 `build/icon.png` (512×512, PNG con transparencia). electron-builder genera el `.ico` de Windows y
 los tamaños de macOS/Linux a partir de él. `build/icon.svg` es el mismo diseño en vectorial.
-Para cambiarlo, sustituye el PNG por otro de al menos 512×512 y reconstruye.
+El diseño son dos eslabones entrelazados con degradado azul y violeta-rosa; `renderer/logo.svg` es
+una copia para la barra lateral y la bienvenida. Para cambiarlo, edita el SVG, regenera el PNG (basta
+con abrir el SVG en Chromium a 512×512 y capturarlo) y reconstruye.
 
 ### Firma de código
 

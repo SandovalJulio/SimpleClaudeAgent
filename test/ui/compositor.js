@@ -3,7 +3,7 @@ module.exports = async ({ page, check, sleep, ACT }) => {
   // Tarjetas de inicio: carrusel con puntos; se navega al punto (data-dot) antes de pulsar la tarjeta.
   const DOT = (a) => `.thread.active .dots [data-dot="${a}"]`;
   check("carrusel: una tarjeta visible y cinco puntos", (await page.$$eval(".thread.active .chips .chip", (els) => els.filter((e) => getComputedStyle(e).display !== "none").length)) === 1 && (await page.$$(".thread.active .dots [data-dot]")).length === 5);
-  await page.click(".thread.active .dots [data-nav=\"1\"]"); await sleep(150);
+  await page.click(".thread.active .dots [data-nav=\"1\"]"); await sleep(400);
   check("carrusel: flecha avanza", await page.$eval(".thread.active .chip.current", (e) => e.dataset.act === "create"));
   await page.click(DOT("create")); await page.click(ACT("create")); await sleep(300);
   const sel = await page.$eval("#input", (e) => e.value.slice(e.selectionStart, e.selectionEnd));

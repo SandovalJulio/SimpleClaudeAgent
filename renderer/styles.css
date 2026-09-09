@@ -68,10 +68,7 @@ aside {
   padding: 16px 14px; gap: 16px; min-height: 0;
 }
 .brand { display: flex; align-items: center; gap: 10px; padding: 2px 6px; }
-.brand .logo {
-  width: 28px; height: 28px; border-radius: 8px; background: var(--ink); color: var(--bg);
-  display: grid; place-items: center; font-weight: 700; font-size: 15px;
-}
+.brand .logo { width: 32px; height: 32px; display: block; }
 .brand .name { font-weight: 600; font-size: 15px; }
 .brand .sub { font-size: 11.5px; color: var(--text-3); }
 
@@ -389,7 +386,7 @@ body.dragging .composer { border-color: var(--accent); border-style: dashed; }
 /* Bienvenida (primera ejecución: pide la clave de API). Fijo: el body es un grid de una fila. */
 .welcome { position: fixed; inset: 0; z-index: 150; background: var(--bg); display: flex; align-items: center; justify-content: center; padding: 24px; }
 .welcome-card { width: 100%; max-width: 440px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 16px; padding: 28px; display: flex; flex-direction: column; gap: 14px; align-items: flex-start; box-shadow: var(--shadow); }
-.welcome-card .logo { width: 40px; height: 40px; border-radius: 12px; background: var(--ink); color: var(--bg); display: grid; place-items: center; font-weight: 700; font-size: 18px; }
+.welcome-card .logo { width: 56px; height: 56px; display: block; }
 .welcome-card h1 { margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -.01em; }
 .welcome-card p { margin: 0; color: var(--text-2); font-size: 13.5px; }
 .welcome-card .field { width: 100%; font-family: var(--mono); }
