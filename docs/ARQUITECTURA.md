@@ -45,7 +45,7 @@ Eventos del bus interno: `conv:activated {convId}`, `settings:changed`, `folder:
 |---|---|---|
 | `getState()` | `{ folder, settings, models, efforts, permissions, connections, config }` | Estado inicial. |
 | `setSettings(patch)` | `settings` | `{model, effort, permission}`. Si hay conversaciones activas aplica `setModel` / `setPermissionMode` en caliente. |
-| `setConfig(patch)` | `config` | `{name, connections:{id:bool}, maxBudgetUsd, maxTurns, sandbox, web, plugins:[ruta], dirs:[ruta], notifications}`. |
+| `setConfig(patch)` | `config` (sin secretos) | `{name, connections:{id: bool | {enabled?, values?}}, maxBudgetUsd, maxTurns, sandbox, web, plugins:[ruta], dirs:[ruta], notifications}`. |
 | `pickFolder()` / `setFolder(ruta)` | `folder` | Cambiar carpeta cierra las conversaciones abiertas. |
 | `pickFiles()` | `[rutas]` | Diálogo nativo de archivos. |
 | `pickDirectory()` | `ruta | null` | Diálogo nativo de carpeta (para plugins y directorios adicionales). |
@@ -60,12 +60,16 @@ Eventos del bus interno: `conv:activated {convId}`, `settings:changed`, `folder:
 | `convStop(convId)` | — | `interrupt()` del turno en curso. |
 | `convClose(convId)` | — | Termina el proceso. |
 | `convRewind({ convId, uuid, dryRun })` | `RewindFilesResult` | Revierte archivos al estado previo al mensaje de usuario `uuid`. |
+| `convDiff({ convId, uuid })` | `[{file, rel, created, deleted, patch, added, removed}]` | Diferencias de los archivos que cambió el turno. Las instantáneas "antes" se toman al llegar el `tool_use` (antes de ejecutarse) y "después" al terminar el turno. |
+| `mcpStatus()` | `[{id, status}]` | Estado de cada conexión: connected, failed, needs-auth, pending, disabled. |
+| `exportSave({ defaultName, text })` | `ruta | null` | Diálogo de guardar y escritura del texto. |
 | `convReply({ reqId, ...respuesta })` | — | Respuesta a un diálogo pendiente (ver eventos `conv:ask`). |
 | `listSessions()` | `[{ sessionId, summary, lastModified }]` | Historial de la carpeta actual, más reciente primero. |
 | `scheduleList()` | `[tarea]` | Ver sección Tareas programadas. |
 | `scheduleSave(tarea)` | `[tarea]` | Crea o actualiza (por `id`). |
 | `scheduleDelete(id)` | `[tarea]` | |
-| `scheduleRun(id)` | — | Ejecuta ahora. Emite `schedule:done`. |
+| `scheduleRun(id)` | — | Ejecuta ahora. Emite `schedule:running` y `schedule:done`. |
+| `scheduleCancel(id)` | `bool` | Aborta la ejecución en curso. |
 
 ## Eventos: main -> renderer (`window.agente.on(nombre, cb)`; cb recibe un objeto)
 
@@ -85,6 +89,8 @@ Todos los eventos de conversación llevan `convId`.
 | `conv:ask` | `{convId, reqId, kind, payload}` | El agente necesita al usuario. Responder con `convReply({reqId, ...})`. Ver abajo. |
 | `conv:closed` | `{convId, reason}` | El proceso terminó. |
 | `schedule:done` | `{id, name, ok, cost, summary, logFile}` | Terminó una tarea programada. |
+| `schedule:running` | `{id, running}` | Empieza o termina una ejecución (para mostrar "Cancelar"). |
+| `mcp:status` | `[{id, status}]` | Estado de conexiones tras iniciar una conversación. |
 
 ### `conv:ask` — tipos (`kind`) y respuesta esperada (`convReply`)
 
@@ -100,8 +106,17 @@ Si el usuario cierra el diálogo sin responder, enviar la respuesta negativa (`a
 ## Tareas programadas (`scheduler.js`)
 
 ```js
-tarea = { id, name, prompt, every: "hour"|"day"|"week", at: "HH:MM", weekday: 0-6, enabled: bool, lastRun: ISO|null, nextRun: ISO }
+tarea = { id, name, prompt, schema: objeto|null, every: "hour"|"day"|"week", at: "HH:MM", weekday: 0-6, enabled: bool, lastRun: ISO|null, nextRun: ISO }
 ```
+`schema` (JSON Schema) activa la salida estructurada (`outputFormat` del SDK); el resultado se guarda
+también en `<id>.jsonl`.
+
+## Conexiones con credenciales
+
+`CONNECTIONS` en `config.js` admite `fields` (credenciales) y `env` / `headers` con plantillas `{clave}`.
+En `config.json`, `connections[id] = { enabled, values: { clave: "enc:<base64>" } }`, cifrado con
+`safeStorage`. El renderer solo recibe `publicConfig()`, donde `values` se sustituye por `has: {clave: bool}`.
+Para guardar una credencial: `setConfig({ connections: { [id]: { values: { clave: texto } } } })`.
 Se guardan en la configuración de la app (`config.schedules`). El planificador revisa cada 60 s.
 Cada ejecución es una consulta de un solo turno (no streaming) con `runOnce(prompt)` que expone
 `agent.js`, en la carpeta de trabajo actual, con el modelo y permisos configurados, y añade el

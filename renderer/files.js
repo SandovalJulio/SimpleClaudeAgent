@@ -233,5 +233,21 @@
     if (r && r.classList.contains("open")) close();
   });
 
-  window.FilesPanel = { render, open, close, isPreviewable };
+  // Panel con contenido HTML propio (p. ej. diferencias de archivos). `html` ya debe venir escapado.
+  function openHtml(title, html) {
+    const r = root();
+    if (!r) return;
+    current = null;
+    r.innerHTML =
+      '<div class="fp-head"><span class="fp-head-icon" aria-hidden="true">±</span>' +
+      '<span class="fp-head-name" title="' + esc(title) + '">' + esc(title) + "</span>" +
+      '<span class="fp-head-acts"><button type="button" class="fp-btn fp-close" data-act="close" title="Cerrar" aria-label="Cerrar">×</button></span></div>' +
+      '<div class="fp-body fp-custom"></div>';
+    r.classList.add("open");
+    document.body.classList.add("panel-open");
+    r.querySelector('[data-act="close"]').onclick = close;
+    r.querySelector(".fp-body").innerHTML = html;
+  }
+
+  window.FilesPanel = { render, open, openHtml, close, isPreviewable };
 })();

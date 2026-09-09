@@ -9,6 +9,7 @@
 
   // ---------- Markdown ----------
   function renderMd(el, text) {
+    el._raw = text || ""; // se conserva el Markdown original para exportar
     el.innerHTML = marked.parse(text || "");
     el.querySelectorAll("table").forEach((t) => {
       if (t.parentElement.classList.contains("table-wrap")) return;
@@ -41,6 +42,7 @@
     });
   }
   function activate(convId) {
+    if (state.activeConv === convId && state.convs.has(convId)) return; // ya activa: no re-pintar (permite el doble clic)
     state.activeConv = convId;
     for (const c of state.convs.values()) c.el.classList.toggle("active", c.id === convId);
     const conv = state.convs.get(convId);
@@ -64,18 +66,73 @@
     renderConvList();
     setTimeout(loadHistory, 600); // la sesión cerrada pasa al historial
   }
+  let renaming = null; // conversación cuyo título se está editando en línea
   function renderConvList() {
+    if (renaming) return; // no destruir el elemento editable
     const box = $("convs"); box.innerHTML = "";
     $("convs-cnt").textContent = state.convs.size > 1 ? `· ${state.convs.size}` : "";
-    for (const c of state.convs.values()) {
-      const b = document.createElement("button");
-      b.className = "conv" + (c.id === state.activeConv ? " active" : "");
-      b.innerHTML = `<span class="dot ${c.busy ? "busy" : ""}"></span><span class="t">${esc(c.title)}</span><span class="x" title="Cerrar">×</span>`;
+    const list = [...state.convs.values()].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0)); // fijadas primero
+    for (const c of list) {
+      // div y no button: el texto dentro de un <button> no puede editarse en línea.
+      const b = document.createElement("div"); b.setAttribute("role", "button"); b.tabIndex = 0;
+      b.className = "conv" + (c.id === state.activeConv ? " active" : "") + (c.pinned ? " pinned" : "");
+      b.title = "Doble clic: renombrar · Clic derecho: fijar";
+      b.innerHTML = `<span class="dot ${c.busy ? "busy" : ""}"></span><span class="t">${esc(c.title)}</span><span class="pin" title="${c.pinned ? "Desfijar" : "Fijar"}">📌</span><span class="x" title="Cerrar">×</span>`;
       b.onclick = () => activate(c.id);
+      b.ondblclick = (e) => { e.preventDefault(); renameConv(c, b.querySelector(".t")); };
+      b.oncontextmenu = (e) => { e.preventDefault(); c.pinned = !c.pinned; renderConvList(); };
+      b.querySelector(".pin").onclick = (e) => { e.stopPropagation(); c.pinned = !c.pinned; renderConvList(); };
       b.querySelector(".x").onclick = (e) => { e.stopPropagation(); closeConv(c.id); };
       box.appendChild(b);
     }
   }
+  // Renombrar en línea (el renderer de Electron no tiene prompt()): el elemento pasa a editable,
+  // Enter o perder el foco guardan, Escape cancela.
+  function renameConv(conv, el) {
+    const target = el || $("crumb-title");
+    const original = conv.title;
+    renaming = conv;
+    target.contentEditable = "true"; target.textContent = original; target.focus();
+    document.getSelection()?.selectAllChildren(target);
+    let done = false;
+    const finish = (save) => {
+      if (done) return; done = true; renaming = null;
+      target.contentEditable = "false";
+      const name = target.textContent.trim().slice(0, 80);
+      if (save && name && name !== original) { conv.title = name; conv.renamed = true; }
+      $("crumb-title").textContent = state.convs.get(state.activeConv)?.title || "Nueva conversación";
+      renderConvList();
+    };
+    target.onblur = () => finish(true);
+    target.onkeydown = (e) => { if (e.key === "Enter") { e.preventDefault(); finish(true); } if (e.key === "Escape") { finish(false); } };
+  }
+  $("crumb-title").ondblclick = () => { const c = active(); if (c) renameConv(c); };
+
+  // ---------- Exportar a Markdown ----------
+  function toMarkdown(conv) {
+    const out = [`# ${conv.title}`, "", `_Exportado el ${new Date().toLocaleString("es-MX")}_`, ""];
+    for (const m of conv.inner.querySelectorAll(".msg")) {
+      if (m.classList.contains("user")) {
+        const files = [...m.querySelectorAll(".file span")].map((s) => s.textContent);
+        out.push("## Tú", "", m.querySelector(".bubble")?.textContent || "", ...(files.length ? ["", "Adjuntos: " + files.join(", ")] : []), "");
+      } else {
+        out.push("## Agente", "");
+        for (const el of m.querySelectorAll(".body > *")) {
+          if (el.classList.contains("md")) out.push(el._raw || el.innerText, "");
+          else if (el.classList.contains("activity")) out.push(...[...el.querySelectorAll(".step")].map((s) => `- 🔧 ${s.querySelector(".name")?.textContent}: \`${s.querySelector(".sum")?.textContent}\``), "");
+          else if (el.classList.contains("usage")) out.push(`> ${el.innerText.replace(/\s+/g, " ").trim()}`, "");
+          else if (el.classList.contains("files-out")) out.push("Archivos: " + [...el.querySelectorAll(".fp-chip")].map((c) => c.title || c.textContent.trim()).join(", "), "");
+        }
+      }
+    }
+    return out.join("\n");
+  }
+  $("export").onclick = async () => {
+    const conv = active(); if (!conv || !conv.hasMessages) return toast("No hay nada que exportar todavía.", "err");
+    const name = conv.title.replace(/[^\p{L}\p{N} _-]/gu, "").trim().slice(0, 60) || "conversacion";
+    const file = await window.agente.exportSave({ defaultName: name + ".md", text: toMarkdown(conv) });
+    if (file) toast("Exportado: " + window.App.baseName(file), "ok");
+  };
   const active = () => state.convs.get(state.activeConv);
   function updateSuggestChip(conv) {
     const ready = !!state.memoryInfo?.suggestReady;
@@ -85,13 +142,15 @@
   on("memory:changed", () => state.convs.forEach(updateSuggestChip));
 
   // ---------- Historial ----------
-  async function loadHistory() {
+  let historyCache = [];
+  async function loadHistory(fromCache) {
     const box = $("history");
     try {
-      const list = await window.agente.listSessions();
+      if (!fromCache) historyCache = await window.agente.listSessions();
+      const q = ($("history-search").value || "").trim().toLowerCase();
       const openIds = new Set([...state.convs.values()].map((c) => c.sessionId));
-      const items = list.filter((s) => !openIds.has(s.sessionId)).slice(0, 15);
-      box.innerHTML = items.length ? "" : '<div class="empty">Sin conversaciones anteriores.</div>';
+      const items = historyCache.filter((s) => !openIds.has(s.sessionId) && (!q || (s.summary || "").toLowerCase().includes(q))).slice(0, q ? 50 : 15);
+      box.innerHTML = items.length ? "" : `<div class="empty">${q ? "Sin coincidencias." : "Sin conversaciones anteriores."}</div>`;
       for (const s of items) {
         const b = document.createElement("button"); b.className = "hist"; b.title = "Clic: continuar · Clic derecho: bifurcar (copia nueva)";
         b.innerHTML = `<span class="t">${esc(s.summary || "Sin título")}</span><span class="d">${new Date(s.lastModified).toLocaleString("es-MX", { dateStyle: "short", timeStyle: "short" })}</span>`;
@@ -101,7 +160,8 @@
       }
     } catch (e) { box.innerHTML = `<div class="empty">No se pudo leer el historial.</div>`; }
   }
-  on("history:refresh", loadHistory);
+  on("history:refresh", () => loadHistory(false));
+  $("history-search").addEventListener("input", () => loadHistory(true));
 
   // ---------- Mensajes ----------
   function scrollBottom(conv, force) {
@@ -120,7 +180,7 @@
     }
     const b = document.createElement("div"); b.className = "bubble"; b.textContent = text;
     col.appendChild(b); m.appendChild(col); conv.inner.appendChild(m);
-    if (conv.title === "Nueva conversación" || conv.title === "Conversación recuperada") { conv.title = text.length > 60 ? text.slice(0, 60) + "…" : text; if (conv.id === state.activeConv) $("crumb-title").textContent = conv.title; renderConvList(); }
+    if (!conv.renamed && (conv.title === "Nueva conversación" || conv.title === "Conversación recuperada")) { conv.title = text.length > 60 ? text.slice(0, 60) + "…" : text; if (conv.id === state.activeConv) $("crumb-title").textContent = conv.title; renderConvList(); }
     scrollBottom(conv, true);
   }
   function startTurn(conv, userUuid) {
@@ -209,9 +269,12 @@
           `<span><span class="k">Tiempo</span>${((r.duration || 0) / 1000).toFixed(1)} s</span><span><span class="k">Turnos</span>${r.turns || 1}</span>`;
         turn.body.appendChild(u);
       }
-      // Acciones del turno: deshacer cambios en archivos (checkpoints del SDK).
+      // Acciones del turno: ver diferencias y deshacer cambios en archivos (checkpoints del SDK).
       if (r.files?.length && r.userUuid) {
         const acts = document.createElement("div"); acts.className = "turn-actions";
+        const view = document.createElement("button"); view.className = "link"; view.textContent = "± Ver cambios";
+        view.onclick = () => showDiff(conv, r.userUuid);
+        acts.appendChild(view);
         const undo = document.createElement("button"); undo.className = "link"; undo.textContent = "↶ Revertir archivos de esta respuesta";
         undo.onclick = async () => {
           const dry = await window.agente.convRewind({ convId: conv.id, uuid: r.userUuid, dryRun: true });
@@ -230,6 +293,21 @@
     if (conv.id === state.activeConv) emit("composer:focus");
   }
   function setStatusIfActive(conv) { if (conv.id === state.activeConv) setStatus(conv.busy); renderConvList(); }
+
+  // Diferencias de los archivos que cambió una respuesta, en el panel lateral.
+  async function showDiff(conv, uuid) {
+    const diffs = await window.agente.convDiff({ convId: conv.id, uuid });
+    if (!diffs.length) return toast("No hay diferencias registradas para esta respuesta.", "err");
+    const html = diffs.map((d) => {
+      const lines = d.patch.split("\n").slice(4).filter((l) => l !== "\\ No newline at end of file").map((l) => {
+        const cls = l.startsWith("+") ? "a" : l.startsWith("-") ? "d" : l.startsWith("@@") ? "h" : "";
+        return `<div class="l ${cls}">${esc(l)}</div>`;
+      }).join("");
+      const tag = d.created ? '<span class="tag">nuevo</span>' : d.deleted ? '<span class="tag">eliminado</span>' : "";
+      return `<div class="diff-file"><div class="diff-head"><span>${esc(d.rel)}</span>${tag}<span class="add">+${d.added}</span><span class="del">−${d.removed}</span></div><pre class="diff-body">${lines || '<div class="l h">(sin cambios de texto)</div>'}</pre></div>`;
+    }).join("");
+    window.FilesPanel.openHtml(`Cambios · ${diffs.length} archivo${diffs.length > 1 ? "s" : ""}`, html);
+  }
 
   // ---------- Envío ----------
   async function send(text, files = []) {

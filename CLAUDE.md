@@ -76,7 +76,23 @@ razonamiento, permisos) son volátiles en main y se persisten en `localStorage` 
 los reenvía al arrancar. El `body` es un grid de una fila: cualquier contenedor auxiliar nuevo en
 `index.html` debe ser `position: fixed` o quedará en una fila extra.
 
+**Diferencias y rewind**: `agent.js` guarda por turno una instantánea del texto de cada archivo
+escrito, tomada cuando llega el `tool_use` (antes de que la herramienta se ejecute) y otra al final
+del turno (`conv.snapshots`, clave = uuid del mensaje de usuario). `convDiff` las compara con el
+paquete `diff`. El rewind real lo hace el SDK con sus checkpoints; las instantáneas son solo para mostrar.
+
+**Credenciales de conexiones**: cifradas con `safeStorage` en `config.json`; el renderer recibe
+`publicConfig()` con indicadores `has`, nunca los valores. `mcpServerFor(c, values)` rellena `{clave}`
+en `env`/`headers`. GitHub es un servidor MCP HTTP remoto; el resto son paquetes npx.
+
+**Empaquetado**: `npm run dist` (electron-builder, NSIS). El binario del CLI del SDK va en
+`asarUnpack`. Ver `docs/EMPAQUETADO.md`. `publish.owner` es un placeholder hasta que exista el repo.
+
 ## Trampas conocidas
+- `prompt()`, `alert()` y compañía no existen en el renderer de Electron (`prompt() is not supported`).
+  El renombrado usa edición en línea (`contenteditable`); los ítems de conversación son `div`, no
+  `button`, porque el texto dentro de un `<button>` no es editable. `renderConvList` no repinta
+  mientras `renaming` está activo, porque los dos clics previos al doble clic destruirían el elemento.
 
 - `[hidden]` está forzado con `!important` en `styles.css` porque las clases con `display:flex` lo
   anulaban. No quites esa regla.

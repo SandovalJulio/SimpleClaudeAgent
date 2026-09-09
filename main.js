@@ -47,9 +47,19 @@ app.on("window-all-closed", () => { agent.closeAll(); app.quit(); });
 // ---------- IPC ----------
 const h = (ch, fn) => ipcMain.handle(ch, (_e, ...a) => fn(...a));
 
-h("state:get", () => ({ folder: cfg.getFolder(), settings: cfg.settings, models: cfg.MODELS, efforts: cfg.EFFORTS, permissions: cfg.PERMISSIONS, connections: cfg.CONNECTIONS, config: cfg.getConfig() }));
+// El renderer nunca recibe secretos: `publicConfig()` sustituye credenciales por indicadores.
+h("state:get", () => ({ folder: cfg.getFolder(), settings: cfg.settings, models: cfg.MODELS, efforts: cfg.EFFORTS, permissions: cfg.PERMISSIONS, connections: cfg.CONNECTIONS, config: cfg.publicConfig() }));
 h("settings:set", async (patch) => { const s = cfg.setSettings(patch); await agent.applySettings(); return s; });
-h("config:set", (patch) => cfg.setConfig(patch));
+h("config:set", (patch) => { cfg.setConfig(patch); return cfg.publicConfig(); });
+h("mcp:status", () => agent.status());
+
+// Exportar texto a un archivo elegido por el usuario (conversaciones en Markdown).
+h("export:save", async ({ defaultName, text }) => {
+  const r = await dialog.showSaveDialog(win, { defaultPath: path.join(cfg.getFolder() || app.getPath("documents"), defaultName || "conversacion.md"), filters: [{ name: "Markdown", extensions: ["md"] }] });
+  if (r.canceled) return null;
+  fs.writeFileSync(r.filePath, text, "utf8");
+  return r.filePath;
+});
 
 h("folder:pick", async () => {
   const r = await dialog.showOpenDialog(win, { properties: ["openDirectory"], defaultPath: cfg.getFolder() || undefined });
@@ -88,6 +98,7 @@ h("conv:send", (o) => agent.send(o));
 h("conv:stop", (id) => agent.stop(id));
 h("conv:close", (id) => agent.close(id));
 h("conv:rewind", (o) => agent.rewind(o));
+h("conv:diff", (o) => agent.diff(o));
 h("conv:reply", (o) => agent.reply(o));
 h("sessions:list", () => agent.sessions());
 
@@ -95,3 +106,21 @@ h("schedule:list", () => scheduler.list());
 h("schedule:save", (t) => scheduler.save(t));
 h("schedule:delete", (id) => scheduler.remove(id));
 h("schedule:run", (id) => scheduler.run(id));
+h("schedule:cancel", (id) => scheduler.cancel(id));
+
+// --- Empaquetado: .env junto al ejecutable y actualizaciones automáticas ---
+// Solo aplica a la app instalada. Ver docs/EMPAQUETADO.md.
+if (app.isPackaged) {
+  // Dentro del asar __dirname no es una carpeta real, así que se busca el .env
+  // junto al ejecutable instalado (además del que carga la línea 6).
+  try { process.loadEnvFile(path.join(path.dirname(process.execPath), ".env")); } catch { /* sin .env: variable del sistema */ }
+
+  app.whenReady().then(() => {
+    try {
+      const { autoUpdater } = require("electron-updater");
+      autoUpdater.autoDownload = true;
+      autoUpdater.on("error", () => { /* sin publish configurado o sin red: se ignora */ });
+      autoUpdater.checkForUpdatesAndNotify();
+    } catch { /* electron-updater ausente: la app sigue funcionando */ }
+  });
+}

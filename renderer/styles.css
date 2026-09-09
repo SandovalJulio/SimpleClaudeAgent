@@ -315,10 +315,11 @@ main { display: flex; flex-direction: row; min-height: 0; min-width: 0; }
 .hero .chips { margin-top: 14px; }
 
 /* Conversaciones (barra lateral) */
-.conv { text-align: left; width: 100%; padding: 7px 10px; border-radius: 10px; display: flex; align-items: center; gap: 8px; font-size: 13px; transition: background .12s; }
+.conv { cursor: pointer; text-align: left; width: 100%; padding: 7px 10px; border-radius: 10px; display: flex; align-items: center; gap: 8px; font-size: 13px; transition: background .12s; }
 .conv:hover { background: var(--bg-hover); }
 .conv.active { background: var(--bg-card); border: 1px solid var(--border); }
 .conv .t { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conv .t[contenteditable="true"] { outline: 1px solid var(--accent); border-radius: 4px; padding: 0 4px; background: var(--bg-card); user-select: text; cursor: text; white-space: normal; }
 .conv .dot { width: 7px; height: 7px; flex: none; }
 .conv .x { color: var(--text-3); padding: 0 4px; line-height: 1; opacity: 0; }
 .conv:hover .x { opacity: 1; }
@@ -354,3 +355,25 @@ body.dragging .composer { border-color: var(--accent); border-style: dashed; }
 .pathrow { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 12px; color: var(--text-2); }
 .pathrow span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .field.num { min-width: 110px; width: 110px; text-align: right; }
+
+/* Búsqueda en historial, título editable, conversaciones fijadas, diferencias */
+.search { width: 100%; height: 28px; padding: 0 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg-card); color: var(--text); font: inherit; font-size: 12.5px; outline: 0; margin: 0 0 4px; }
+.search:focus { border-color: var(--text-3); }
+.conv .pin { color: var(--text-3); padding: 0 3px; font-size: 11px; opacity: 0; }
+.conv:hover .pin, .conv.pinned .pin { opacity: 1; }
+.conv.pinned .pin { color: var(--accent); }
+.crumb b[contenteditable="true"] { outline: 1px solid var(--accent); border-radius: 4px; padding: 0 4px; }
+.diff-file { margin: 0 0 14px; border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+.diff-head { display: flex; align-items: center; gap: 10px; padding: 8px 12px; background: var(--bg-inline); font-family: var(--mono); font-size: 12px; }
+.diff-head .add { color: var(--ok); } .diff-head .del { color: var(--err); }
+.diff-head .tag { font-family: var(--sans); font-size: 10.5px; color: var(--text-3); }
+.diff-body { margin: 0; padding: 8px 0; font: 12px/1.5 var(--mono); overflow-x: auto; background: var(--bg-code); }
+.diff-body .l { padding: 0 12px; white-space: pre; }
+.diff-body .l.a { background: rgba(22,163,74,.12); } .diff-body .l.d { background: rgba(220,38,38,.12); } .diff-body .l.h { color: var(--text-3); }
+.fp-custom { overflow: auto; padding: 12px; }
+.mcp-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; background: var(--text-3); }
+.mcp-dot.connected { background: var(--ok); } .mcp-dot.failed { background: var(--err); } .mcp-dot.needs-auth { background: #d97706; } .mcp-dot.pending { background: var(--accent); }
+.cred { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
+.cred .credrow { display: flex; gap: 6px; align-items: center; }
+.cred input { flex: 1; min-width: 0; }
+.cred .help { font-size: 11px; color: var(--text-3); }

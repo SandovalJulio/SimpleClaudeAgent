@@ -28,6 +28,9 @@ contextBridge.exposeInMainWorld("agente", {
   convStop: invoke("conv:stop"),
   convClose: invoke("conv:close"),
   convRewind: invoke("conv:rewind"),
+  convDiff: invoke("conv:diff"),
+  mcpStatus: invoke("mcp:status"),
+  exportSave: invoke("export:save"),
   convReply: invoke("conv:reply"),
   listSessions: invoke("sessions:list"),
   // tareas programadas
@@ -35,6 +38,7 @@ contextBridge.exposeInMainWorld("agente", {
   scheduleSave: invoke("schedule:save"),
   scheduleDelete: invoke("schedule:delete"),
   scheduleRun: invoke("schedule:run"),
+  scheduleCancel: invoke("schedule:cancel"),
   // eventos main -> renderer
   on: (channel, cb) => { ipcRenderer.on(channel, (_e, data) => cb(data)); },
 });

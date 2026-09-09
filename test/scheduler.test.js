@@ -135,7 +135,7 @@ function ok(msg) {
     getFolder: () => folder,
   });
   await scheduler.run(id2);
-  const p2 = emitted[antes].data;
+  const p2 = emitted.slice(antes).filter((e) => e.event === "schedule:done").pop().data;
   assert.strictEqual(p2.summary.length, 200, "el resumen se recorta a 200 letras");
   ok("el resumen se limita a 200 letras");
 

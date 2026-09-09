@@ -2,13 +2,18 @@
 // Cada conversación es una query en modo streaming-input: el proceso del SDK queda vivo,
 // se le encolan mensajes de usuario y permite interrupt / setModel / setPermissionMode / rewindFiles.
 const path = require("path");
+const fs = require("fs");
 const crypto = require("crypto");
+const Diff = require("diff");
 const { query, listSessions } = require("@anthropic-ai/claude-agent-sdk");
 const cfg = require("./config");
 const mem = require("./memory");
 
 const convs = new Map();   // convId -> conv
 const pending = new Map(); // reqId -> resolve (diálogos esperando al usuario)
+const mcpStatus = new Map(); // nombre de servidor -> estado (último conocido)
+const IMAGE_EXT = { ".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp" };
+const MAX_IMAGE = 5 * 1024 * 1024;
 let emit = () => {};       // (evento, datos) -> renderer
 let notify = () => {};     // (titulo, cuerpo)
 
@@ -23,8 +28,8 @@ function buildOptions(conv, { resume, fork, oneShot } = {}) {
   const { model, effort, permission } = cfg.settings;
   const profile = conv.profile;
 
-  const active = cfg.CONNECTIONS.filter((c) => config.connections[c.id]);
-  const mcpServers = Object.fromEntries(active.map((c) => [c.id, cfg.mcpServerFor(c)]));
+  const active = cfg.CONNECTIONS.filter((c) => cfg.connState(c.id).enabled);
+  const mcpServers = Object.fromEntries(active.map((c) => [c.id, cfg.mcpServerFor(c, cfg.connValues(c.id))]));
   const tools = ["Read", "Glob", "Grep", "Skill", "Write", "Edit", "Bash", "AskUserQuestion", "ExitPlanMode", "TodoWrite"];
   if (config.web) tools.push("WebSearch", "WebFetch");
   tools.push(...active.map((c) => `mcp__${c.id}`));
@@ -113,7 +118,8 @@ function create({ resume, fork } = {}) {
   const conv = {
     id, folder, sessionId: null, busy: false, closed: false,
     abort: new AbortController(), profile: mem.loadProfile(folder),
-    turn: null, // { userUuid, files:Set }
+    turn: null,        // { userUuid, files:Set, before:{ruta: texto|null} }
+    snapshots: new Map(), // userUuid -> { before, after } para ver diferencias
     push(msg) { queue.push(msg); const w = wake; wake = null; w?.(); },
     close(reason = "closed") {
       if (closed) return;
@@ -136,17 +142,26 @@ function create({ resume, fork } = {}) {
 function send({ convId, text, files = [] }) {
   const conv = convs.get(convId);
   if (!conv) throw new Error("La conversación ya no existe.");
-  let prompt = text;
-  if (files.length) {
-    prompt += "\n\nArchivos adjuntos por el usuario (léelos si son relevantes):\n" + files.map((f) => "- " + f).join("\n");
-    for (const f of files) mem.noteExt(conv.profile, f);
+  // Imágenes pequeñas van como bloques de imagen reales; el resto, como rutas para Read.
+  const images = [], others = [];
+  for (const f of files) {
+    mem.noteExt(conv.profile, f);
+    const mime = IMAGE_EXT[path.extname(f).toLowerCase()];
+    let size = 0; try { size = fs.statSync(f).size; } catch { /* no existe */ }
+    (mime && size > 0 && size <= MAX_IMAGE ? images : others).push(f);
   }
+  let prompt = text;
+  if (others.length) prompt += "\n\nArchivos adjuntos por el usuario (léelos si son relevantes):\n" + others.map((f) => "- " + f).join("\n");
+  if (images.length) prompt += "\n\n(El usuario adjuntó " + images.length + " imagen(es), incluidas en este mensaje.)";
+  const content = images.length
+    ? [{ type: "text", text: prompt }, ...images.map((f) => ({ type: "image", source: { type: "base64", media_type: IMAGE_EXT[path.extname(f).toLowerCase()], data: fs.readFileSync(f).toString("base64") } }))]
+    : prompt;
   const uuid = crypto.randomUUID();
-  conv.turn = { userUuid: uuid, files: new Set(), started: Date.now() };
+  conv.turn = { userUuid: uuid, files: new Set(), before: {}, started: Date.now() };
   conv.busy = true;
   emit("conv:busy", { convId, busy: true });
   emit("conv:user", { convId, uuid, text, files });
-  conv.push({ type: "user", uuid, session_id: conv.sessionId || "", parent_tool_use_id: null, message: { role: "user", content: prompt } });
+  conv.push({ type: "user", uuid, session_id: conv.sessionId || "", parent_tool_use_id: null, message: { role: "user", content } });
   return true;
 }
 
@@ -155,7 +170,9 @@ async function pump(conv) {
     const convId = conv.id;
     if (m.type === "system" && m.subtype === "init") {
       conv.sessionId = m.session_id;
+      for (const s of m.mcp_servers || []) mcpStatus.set(s.name, s.status);
       emit("conv:init", { convId, sessionId: m.session_id });
+      emit("mcp:status", statusList());
     } else if (m.type === "system" && m.subtype === "task_progress") {
       emit("conv:progress", { convId, text: m.summary || m.description || "" });
     } else if (m.type === "stream_event") {
@@ -166,7 +183,15 @@ async function pump(conv) {
         if (block.type !== "tool_use") continue;
         conv.profile.tools[block.name] = (conv.profile.tools[block.name] || 0) + 1;
         const fp = block.input?.file_path;
-        if (fp) { mem.noteExt(conv.profile, fp); if (WRITE_TOOLS.has(block.name) && conv.turn) conv.turn.files.add(path.resolve(conv.folder, fp)); }
+        if (fp) {
+          mem.noteExt(conv.profile, fp);
+          if (WRITE_TOOLS.has(block.name) && conv.turn) {
+            const abs = path.resolve(conv.folder, fp);
+            conv.turn.files.add(abs);
+            // Instantánea "antes": el tool_use llega antes de que la herramienta se ejecute.
+            if (!(abs in conv.turn.before)) conv.turn.before[abs] = readText(abs);
+          }
+        }
         emit("conv:tool", { convId, id: block.id, name: block.name, input: block.input });
       }
     } else if (m.type === "user") {
@@ -181,6 +206,10 @@ async function pump(conv) {
       const u = m.usage || {};
       const t = conv.turn || {};
       const files = [...(t.files || [])];
+      if (t.userUuid && files.length) {
+        const after = {}; for (const f of files) after[f] = readText(f);
+        conv.snapshots.set(t.userUuid, { before: t.before || {}, after });
+      }
       conv.busy = false; conv.turn = null;
       emit("conv:result", {
         convId, subtype: m.subtype, cost: m.total_cost_usd, turns: m.num_turns, duration: m.duration_ms,
@@ -196,6 +225,39 @@ async function pump(conv) {
     }
   }
   conv.close("ended");
+}
+
+// Texto de un archivo para diferencias (null si no existe; se omiten binarios y > 2 MB).
+function readText(abs) {
+  try {
+    const st = fs.statSync(abs);
+    if (st.size > 2 * 1024 * 1024) return "(archivo demasiado grande para mostrar diferencias)";
+    const buf = fs.readFileSync(abs);
+    if (buf.subarray(0, 8000).includes(0)) return "(archivo binario)";
+    return buf.toString("utf8");
+  } catch { return null; }
+}
+// Diferencias de los archivos modificados en el turno identificado por el uuid del mensaje de usuario.
+function diff({ convId, uuid }) {
+  const c = convs.get(convId);
+  const snap = c?.snapshots.get(uuid);
+  if (!snap) return [];
+  return Object.keys(snap.after).map((file) => {
+    const before = snap.before[file] ?? "", after = snap.after[file] ?? "";
+    const rel = path.relative(c.folder, file) || file;
+    const patch = Diff.createTwoFilesPatch(rel, rel, before, after, snap.before[file] == null ? "(nuevo)" : "", snap.after[file] == null ? "(eliminado)" : "", { context: 3 });
+    const lines = patch.split("\n").slice(4);
+    return { file, rel, created: snap.before[file] == null, deleted: snap.after[file] == null, patch, added: lines.filter((l) => l.startsWith("+")).length, removed: lines.filter((l) => l.startsWith("-")).length };
+  });
+}
+function statusList() {
+  return cfg.CONNECTIONS.map((c) => ({ id: c.id, status: cfg.connState(c.id).enabled ? (mcpStatus.get(c.id) || "pending") : "disabled" }));
+}
+// Estado fresco de las conexiones MCP (pregunta a la conversación más reciente si la hay).
+async function status() {
+  const c = [...convs.values()].pop();
+  if (c) { try { for (const s of await c.q.mcpServerStatus()) mcpStatus.set(s.name, s.status); } catch { /* proceso arrancando */ } }
+  return statusList();
 }
 
 async function stop(convId) { const c = convs.get(convId); if (c?.busy) await c.q.interrupt(); }
@@ -225,19 +287,23 @@ async function sessions() {
 }
 
 // Consulta de un solo turno, sin UI (tareas programadas).
-async function runOnce(prompt) {
-  const conv = { id: "once", folder: cfg.getFolder(), profile: mem.loadProfile(cfg.getFolder()), abort: new AbortController() };
+// opts.schema: JSON Schema -> salida estructurada en `structured`. opts.signal: AbortSignal para cancelar.
+async function runOnce(prompt, { schema, signal } = {}) {
+  const abort = new AbortController();
+  if (signal) signal.addEventListener("abort", () => abort.abort(), { once: true });
+  const conv = { id: "once", folder: cfg.getFolder(), profile: mem.loadProfile(cfg.getFolder()), abort };
   const opts = buildOptions(conv, { oneShot: true });
   opts.permissionMode = cfg.settings.permission === "default" || cfg.settings.permission === "plan" ? "acceptEdits" : cfg.settings.permission;
   opts.allowedTools = opts.allowedTools.filter((t) => t !== "AskUserQuestion" && t !== "ExitPlanMode");
   delete opts.canUseTool; delete opts.onElicitation; delete opts.includePartialMessages;
-  let out = { ok: false, text: "", cost: 0, error: null };
+  if (schema) opts.outputFormat = { type: "json_schema", schema };
+  let out = { ok: false, text: "", cost: 0, error: null, structured: null };
   try {
     for await (const m of query({ prompt, options: opts })) {
-      if (m.type === "result") out = { ok: m.subtype === "success" && !m.is_error, text: m.result || "", cost: m.total_cost_usd || 0, error: m.subtype !== "success" ? m.subtype : null };
+      if (m.type === "result") out = { ok: m.subtype === "success" && !m.is_error, text: m.result || "", cost: m.total_cost_usd || 0, error: m.subtype !== "success" ? m.subtype : null, structured: m.structured_output ?? null };
     }
-  } catch (e) { out.error = String(e.message || e); }
+  } catch (e) { out.error = abort.signal.aborted ? "Cancelada por el usuario." : String(e.message || e); }
   return out;
 }
 
-module.exports = { init, create, send, stop, close, closeAll, rewind, reply, applySettings, sessions, runOnce, count: () => convs.size };
+module.exports = { init, create, send, stop, close, closeAll, rewind, reply, applySettings, sessions, runOnce, diff, status, count: () => convs.size };

@@ -96,6 +96,7 @@
       id: "",
       name: "",
       prompt: "",
+      schema: null,
       every: "day",
       at: "09:00",
       weekday: 1,
@@ -152,18 +153,16 @@
     h += '<span class="sch-dot">·</span><span>' + esc(lastLabel(t.lastRun)) + "</span>";
     h += "</div>";
     h += '<div class="sch-prompt">' + esc(t.prompt) + "</div>";
+    if (t.schema) h += '<div class="sch-meta"><span class="sch-freq">Salida estructurada (JSON)</span></div>';
     h += "</div>";
     h += '<div class="sch-actions">';
     h +=
       '<button class="switch' +
       (t.enabled ? " on" : "") +
       '" data-act="toggle" title="Activar o desactivar"></button>';
-    h +=
-      '<button class="btn" data-act="run"' +
-      (running ? " disabled" : "") +
-      ">" +
-      (running ? "Ejecutando…" : "Ejecutar ahora") +
-      "</button>";
+    h += running
+      ? '<button class="btn sch-del" data-act="cancelrun">Cancelar ejecución</button>'
+      : '<button class="btn" data-act="run">Ejecutar ahora</button>';
     h += '<button class="btn ghost" data-act="edit">Editar</button>';
     h += '<button class="btn ghost sch-del" data-act="del">Eliminar</button>';
     h += "</div>";
@@ -188,6 +187,14 @@
     h +=
       '<textarea class="field sch-textarea" id="sch-prompt" rows="4" placeholder="Revisa los cambios de hoy y escribe un resumen.">' +
       esc(d.prompt) +
+      "</textarea>";
+    h += "</div>";
+
+    h += '<div class="row sch-row-block">';
+    h += '<div class="lbl"><b>Esquema JSON (opcional)</b><span>Si lo defines, el resultado se devuelve como JSON que cumple el esquema y se acumula en <code>.claude/programadas/&lt;id&gt;.jsonl</code>, listo para tablas.</span></div>';
+    h +=
+      '<textarea class="field sch-textarea" id="sch-schema" rows="4" spellcheck="false" placeholder="' + esc('{"type":"object","properties":{"resumen":{"type":"string"},"pendientes":{"type":"integer"}},"required":["resumen"]}') + '">' +
+      esc(d.schema ? (typeof d.schema === "string" ? d.schema : JSON.stringify(d.schema, null, 2)) : "") +
       "</textarea>";
     h += "</div>";
 
@@ -281,6 +288,14 @@
           });
       };
 
+    var cancelRun = el.querySelector('[data-act="cancelrun"]');
+    if (cancelRun)
+      cancelRun.onclick = function () {
+        Promise.resolve(api().scheduleCancel ? api().scheduleCancel(id) : false)
+          .then(function (ok) { toast(ok ? "Ejecución cancelada." : "No había ejecución en curso.", ok ? "ok" : "err"); })
+          .catch(function (e) { toast("No se pudo cancelar: " + ((e && e.message) || e), "err"); });
+      };
+
     var editBtn = el.querySelector('[data-act="edit"]');
     if (editBtn)
       editBtn.onclick = function () {
@@ -350,6 +365,7 @@
       id: editing && editing.id ? editing.id : "",
       name: String(g("#sch-name")).trim(),
       prompt: String(g("#sch-prompt")).trim(),
+      schema: String(g("#sch-schema")).trim() || null,
       every: g("#sch-every") || "day",
       at: g("#sch-at") || "09:00",
       weekday: Number(g("#sch-weekday")) || 0,
@@ -362,6 +378,7 @@
       id: t.id,
       name: t.name,
       prompt: t.prompt,
+      schema: t.schema || null,
       every: t.every,
       at: t.at || "09:00",
       weekday: Number(t.weekday) || 0,
@@ -409,6 +426,13 @@
 
     if (!wired && api().on) {
       wired = true;
+      // Ejecuciones iniciadas por el planificador (no desde la UI) también muestran "Cancelar ejecución".
+      if (api().on) api().on("schedule:running", function (d) {
+        d = d || {};
+        if (!d.id) return;
+        if (d.running) busy[d.id] = true; else delete busy[d.id];
+        render();
+      });
       api().on("schedule:done", function (d) {
         d = d || {};
         if (d.id) delete busy[d.id];

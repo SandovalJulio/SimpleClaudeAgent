@@ -45,7 +45,7 @@
 
         <div class="cfg-section">
           <h3>Conexiones</h3>
-          <p class="desc">Herramientas externas que el agente puede usar. No requieren claves; se descargan con <code>npx</code> la primera vez.</p>
+          <p class="desc">Herramientas externas que el agente puede usar. Las tres primeras no requieren claves. GitHub, Notion, Slack y Brave necesitan un token, que se guarda cifrado en este equipo y nunca se muestra en la interfaz. Las de <code>npx</code> se descargan la primera vez.</p>
           <div id="cfg-connections"></div>
         </div>
 
@@ -71,6 +71,7 @@
     renderTheme();
     $("cfg-font").value = localStorage.getItem("font") || "sans";
     overlay.classList.add("open");
+    refreshMcpStatus();
   }
   function close() { overlay.classList.remove("open"); window.App.refreshSide(); }
   $("open-config").onclick = open;
@@ -104,16 +105,41 @@
   $("add-dir").onclick = async () => { const d = await window.agente.pickDirectory(); if (d) setConfig({ dirs: [...(state.config.dirs || []), d] }); };
   $("add-plugin").onclick = async () => { const d = await window.agente.pickDirectory(); if (d) setConfig({ plugins: [...(state.config.plugins || []), d] }); };
 
+  // Conexiones: interruptor, estado real del servidor MCP y credenciales (se guardan cifradas en el proceso principal).
+  const STATUS_LABEL = { connected: "Conectada", failed: "Con error", "needs-auth": "Requiere autenticación", pending: "Conectando…", disabled: "Desactivada" };
+  let mcpStatus = {};
   function renderConnections() {
     const box = $("cfg-connections"); box.innerHTML = "";
     for (const c of state.connections) {
-      const on = !!state.config.connections?.[c.id];
+      const st = state.config.connections?.[c.id] || { enabled: false, has: {} };
+      const on = !!st.enabled;
+      const status = on ? (mcpStatus[c.id] || "pending") : "disabled";
       const row = document.createElement("div"); row.className = "row";
-      row.innerHTML = `<div class="lbl"><b>${esc(c.label)}</b><span>${esc(c.note)}</span><code>${esc(c.pkg)}</code></div><button class="switch ${on ? "on" : ""}" role="switch" aria-checked="${on}"></button>`;
-      row.querySelector(".switch").onclick = () => setConfig({ connections: { [c.id]: !on } });
+      const fields = (c.fields || []).map((f) => `
+        <div class="credrow">
+          <input class="field" type="${f.secret === false ? "text" : "password"}" data-key="${f.key}" placeholder="${esc(f.label)}${st.has?.[f.key] ? " (guardado)" : ""}" autocomplete="off" />
+          <button class="btn ghost" data-save="${f.key}">Guardar</button>
+        </div>${f.help ? `<span class="help">${esc(f.help)}</span>` : ""}`).join("");
+      row.innerHTML = `<div class="lbl"><b><span class="mcp-dot ${status}" title="${STATUS_LABEL[status]}"></span>${esc(c.label)}</b><span>${esc(c.note)} · ${STATUS_LABEL[status]}</span><code>${esc(c.pkg || c.url)}</code>${fields ? `<div class="cred">${fields}</div>` : ""}</div>
+        <button class="switch ${on ? "on" : ""}" role="switch" aria-checked="${on}"></button>`;
+      row.querySelector(".switch").onclick = () => {
+        const missing = (c.fields || []).filter((f) => !st.has?.[f.key]);
+        if (!on && missing.length) return toast(`Guarda primero: ${missing.map((f) => f.label).join(", ")}.`, "err");
+        setConfig({ connections: { [c.id]: { enabled: !on } } });
+      };
+      row.querySelectorAll("[data-save]").forEach((b) => (b.onclick = async () => {
+        const input = row.querySelector(`input[data-key="${b.dataset.save}"]`);
+        if (!input.value.trim()) return toast("Escribe un valor antes de guardar.", "err");
+        await setConfig({ connections: { [c.id]: { values: { [b.dataset.save]: input.value } } } });
+        toast("Credencial guardada de forma cifrada.", "ok");
+      }));
       box.appendChild(row);
     }
   }
+  async function refreshMcpStatus() {
+    try { for (const s of await window.agente.mcpStatus()) mcpStatus[s.id] = s.status; renderConnections(); } catch { /* sin conversaciones abiertas */ }
+  }
+  window.agente.on("mcp:status", (list) => { for (const s of list) mcpStatus[s.id] = s.status; if (overlay.classList.contains("open")) renderConnections(); });
 
   // Tema y fuente
   function renderTheme() { const t = localStorage.getItem("theme") || "system"; root.querySelectorAll("#theme-seg button").forEach((b) => b.classList.toggle("active", b.dataset.theme === t)); }

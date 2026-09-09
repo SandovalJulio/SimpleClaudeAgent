@@ -54,6 +54,7 @@
 
     <div class="section">
       <div class="section-head"><span>Historial</span></div>
+      <input id="history-search" class="search" placeholder="Buscar en el historial…" />
       <div id="history" class="list" style="max-height:170px"><div class="empty">Sin conversaciones anteriores.</div></div>
     </div>
 
@@ -71,7 +72,12 @@
     <div class="center">
       <div class="topbar">
         <div class="crumb"><span id="crumb-folder">Sin carpeta</span><span>›</span><b id="crumb-title">Nueva conversación</b></div>
-        <div class="status"><span id="status-text">Listo</span><span id="status-dot" class="dot"></span></div>
+        <div class="status">
+          <button id="export" class="btn ghost" title="Exportar conversación a Markdown">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 10l5 5 5-5M4 21h16"/></svg>
+          </button>
+          <span id="status-text">Listo</span><span id="status-dot" class="dot"></span>
+        </div>
       </div>
 
       <div id="thread-area"></div>

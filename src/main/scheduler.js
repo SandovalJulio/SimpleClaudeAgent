@@ -18,6 +18,7 @@ const EVERY = ["hour", "day", "week"];
 let deps = null; // { getConfig, saveConfig, runOnce, notify, emit, getFolder }
 let timer = null;
 const running = new Set(); // ids en ejecución (evita solapes)
+const controllers = new Map(); // id -> AbortController (para cancelar)
 
 /* ------------------------------------------------------------------ utils */
 
@@ -128,10 +129,18 @@ function validate(task) {
     weekday = wd;
   }
 
+  // Esquema JSON opcional: salida estructurada (se guarda además en <id>.jsonl).
+  let schema = null;
+  if (t.schema != null && String(t.schema).trim()) {
+    try { schema = typeof t.schema === "string" ? JSON.parse(t.schema) : t.schema; } catch { throw new Error("El esquema JSON no es válido."); }
+    if (!schema || typeof schema !== "object") throw new Error("El esquema JSON debe ser un objeto.");
+  }
+
   return {
     id: t.id ? String(t.id) : crypto.randomUUID(),
     name: name,
     prompt: prompt,
+    schema: schema,
     every: every,
     at: at,
     weekday: weekday,
@@ -166,6 +175,23 @@ function appendLog(task, body) {
     // Si no se puede escribir el registro, la ejecución sigue siendo válida.
   }
   return file;
+}
+
+// Salida estructurada: una línea JSON por ejecución en <id>.jsonl (fácil de importar a tablas).
+function appendJsonl(task, data) {
+  const file = logFileFor(task.id).replace(/\.md$/, ".jsonl");
+  try {
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.appendFileSync(file, JSON.stringify({ at: new Date().toISOString(), name: task.name, data: data }) + "\n", "utf8");
+  } catch (e) { /* no crítico */ }
+}
+
+// Cancela una ejecución en curso.
+function cancel(id) {
+  const c = controllers.get(id);
+  if (!c) return false;
+  c.abort();
+  return true;
 }
 
 function summarize(text) {
@@ -219,26 +245,37 @@ async function run(id) {
   if (running.has(task.id)) return { ok: false, error: "La tarea ya se está ejecutando." };
 
   running.add(task.id);
+  const ctrl = new AbortController();
+  controllers.set(task.id, ctrl);
+  try { dep("emit")("schedule:running", { id: task.id, running: true }); } catch (e) { /* ignorar */ }
   let ok = false;
   let cost = 0;
   let text = "";
   let error = null;
+  let structured = null;
 
   try {
-    const res = (await dep("runOnce")(task.prompt, {})) || {};
+    const res = (await dep("runOnce")(task.prompt, { schema: task.schema || undefined, signal: ctrl.signal })) || {};
     ok = !!res.ok && !res.error;
     cost = Number(res.cost) || 0;
     text = res.text == null ? "" : String(res.text);
     error = res.error ? String(res.error) : null;
+    structured = res.structured == null ? null : res.structured;
     if (!ok && !error) error = "La ejecución no devolvió resultado.";
   } catch (e) {
     ok = false;
     error = (e && e.message) || String(e);
   } finally {
     running.delete(task.id);
+    controllers.delete(task.id);
+    try { dep("emit")("schedule:running", { id: task.id, running: false }); } catch (e) { /* ignorar */ }
   }
 
-  const body = ok ? text || "(sin texto)" : "**Error:** " + (error || "desconocido");
+  let body = ok ? text || "(sin texto)" : "**Error:** " + (error || "desconocido");
+  if (ok && structured != null) {
+    body = "```json\n" + JSON.stringify(structured, null, 2) + "\n```\n\n" + body;
+    appendJsonl(task, structured);
+  }
   const logFile = appendLog(task, body);
 
   const now = new Date();
@@ -324,4 +361,4 @@ function stop() {
   timer = null;
 }
 
-module.exports = { start, stop, list, save, remove, run, tick, computeNext };
+module.exports = { start, stop, list, save, remove, run, cancel, tick, computeNext };

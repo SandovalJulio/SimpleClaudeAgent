@@ -88,14 +88,35 @@ const ACT = (a) => `.thread.active [data-act="${a}"]`;
   check("segunda conversación", (await page.$$("#convs .conv")).length === 2 && (await page.$$(".thread")).length === 2);
   await page.click("#convs .conv:first-child"); await sleep(200);
   check("cambiar de conversación", await page.$eval("#convs .conv:first-child", (e) => e.classList.contains("active")));
+  // Fijar y renombrar
+  await page.click("#convs .conv:last-child", { button: "right" }); await sleep(200);
+  check("fijar conversación la pone primera", await page.$eval("#convs .conv:first-child", (e) => e.classList.contains("pinned")));
+  await page.dblclick("#convs .conv:first-child .t"); await sleep(200);
+  await page.keyboard.type("Mi tarea"); await page.keyboard.press("Enter"); await sleep(300);
+  check("renombrar conversación", (await page.textContent("#convs .conv:first-child .t")) === "Mi tarea", await page.textContent("#convs .conv:first-child .t"));
   await page.hover("#convs .conv:last-child"); await page.click("#convs .conv:last-child .x"); await sleep(400);
   check("cerrar conversación", (await page.$$("#convs .conv")).length === 1);
+  // Buscar en historial (sin sesiones aún: muestra "Sin coincidencias")
+  await page.fill("#history-search", "zzzz"); await sleep(200);
+  check("búsqueda en historial filtra", (await page.textContent("#history")).includes("Sin coincidencias"));
+  await page.fill("#history-search", "");
 
   // Configuración
   await page.click("#open-config"); await sleep(500);
   check("abre configuración", await page.$eval("#overlay", (e) => e.classList.contains("open")));
   check("memorias cargadas en editor", (await page.inputValue("#mem-edit")).includes("## Memoria"));
-  check("conexiones listadas", (await page.$$("#cfg-connections .switch")).length === 3);
+  check("conexiones listadas", (await page.$$("#cfg-connections .switch")).length === 7);
+  // Conexión con credencial: no se activa sin token; con token guardado (cifrado) sí, y el renderer no recibe el secreto.
+  const gh = (await page.$$("#cfg-connections .row"))[3];
+  await gh.$eval(".switch", (e) => e.click()); await sleep(300);
+  check("conexión con token no se activa sin credencial", !(await gh.$eval(".switch", (e) => e.classList.contains("on"))));
+  await gh.$eval('input[data-key="token"]', (e) => { e.value = "ghp_prueba123"; });
+  await gh.$eval('[data-save="token"]', (e) => e.click()); await sleep(400);
+  const gh2 = (await page.$$("#cfg-connections .row"))[3];
+  check("credencial guardada sin exponerla", (await gh2.$eval('input[data-key="token"]', (e) => e.placeholder)).includes("(guardado)") && (await page.evaluate(async () => JSON.stringify((await window.agente.getState()).config))).includes("ghp_") === false);
+  await gh2.$eval(".switch", (e) => e.click()); await sleep(400);
+  check("conexión con token se activa", await (await page.$$("#cfg-connections .row"))[3].$eval(".switch", (e) => e.classList.contains("on")));
+  await (await page.$$("#cfg-connections .row"))[3].$eval(".switch", (e) => e.click()); await sleep(300);
   check("tareas programadas montadas", (await page.$eval("#cfg-schedules", (e) => e.children.length)) > 0);
   await page.fill("#cfg-name", "Julio"); await page.dispatchEvent("#cfg-name", "change"); await sleep(200);
   await page.fill("#cfg-budget", "2.5"); await page.dispatchEvent("#cfg-budget", "change"); await sleep(200);
@@ -129,10 +150,14 @@ const ACT = (a) => `.thread.active [data-act="${a}"]`;
     check("turno con permiso completado", done);
     check("archivo creado en disco", fs.existsSync(path.join(WS, "hola.txt")));
     check("chip de archivo producido", (await page.$$(".thread.active .fp-chip")).length >= 1);
-    check("botón revertir presente", !!(await page.$(".thread.active .turn-actions .link")));
+    check("botón revertir presente", (await page.$$(".thread.active .turn-actions .link")).length === 2);
+    // Ver cambios: abre el panel con la diferencia del archivo nuevo.
+    await page.getByRole("button", { name: "± Ver cambios" }).first().click(); await sleep(800);
+    check("panel de diferencias", (await page.$$("#panel-root .diff-file")).length >= 1 && (await page.textContent("#panel-root")).includes("hola mundo"));
+    await page.click("#panel-root [data-act='close']"); await sleep(200);
     // Revertir archivos (checkpoints del SDK): acepta el confirm() y comprueba que el archivo desaparece.
     page.once("dialog", (d) => d.accept());
-    await page.click(".thread.active .turn-actions .link"); await sleep(2500);
+    await page.getByRole("button", { name: /Revertir archivos/ }).first().click(); await sleep(2500);
     check("revertir elimina el archivo creado", !fs.existsSync(path.join(WS, "hola.txt")));
     await page.click("#perm-pill"); await sleep(200); await page.click('#menu [data-perm="acceptEdits"]'); await sleep(300);
 

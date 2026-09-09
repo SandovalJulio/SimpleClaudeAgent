@@ -48,7 +48,11 @@ Dependencias de ejecución: `@anthropic-ai/claude-agent-sdk` y `marked`. Nada m�
 
 ## Instalación
 
-Requisitos: Node 18 o superior y una clave de API de Anthropic.
+**Instalador (Windows).** `npm run dist` genera `dist/Agente Setup <versión>.exe` con icono. La app
+busca actualizaciones en las releases de GitHub del repositorio configurado en `package.json`.
+Detalles en `docs/EMPAQUETADO.md`. Sin certificado de firma, Windows mostrará "Editor desconocido".
+
+**Desde el código.** Requisitos: Node 18 o superior y una clave de API de Anthropic.
 
 ```bash
 git clone https://github.com/<tu-usuario>/agente.git
@@ -87,8 +91,10 @@ herramientas de desarrollo.
 ### Conversación
 - **Conversaciones en paralelo.** Varias a la vez, cada una con su propio proceso del SDK. La barra
   lateral las lista con un indicador de actividad.
-- **Historial.** Sesiones anteriores de la carpeta. Clic para continuar donde lo dejaste; clic
-  derecho para bifurcar una copia sin tocar la original.
+- **Historial** con búsqueda. Sesiones anteriores de la carpeta. Clic para continuar donde lo
+  dejaste; clic derecho para bifurcar una copia sin tocar la original.
+- **Renombrar** (doble clic en el título) y **fijar** (clic derecho o 📌) conversaciones.
+- **Exportar** la conversación a Markdown desde la barra superior.
 - **Streaming** de texto y **resumen de progreso** mientras el agente trabaja.
 - **Línea de actividad** plegable con cada herramienta usada, el archivo o comando afectado y su
   resultado.
@@ -118,8 +124,11 @@ libre. Las solicitudes de conexiones MCP (elicitación) también.
 ### Archivos
 - **Archivos producidos** por cada respuesta, como chips con Abrir, Carpeta y Vista previa.
 - **Panel de vista previa** lateral para HTML, Markdown, imágenes, PDF, JSON, CSV y texto.
+- **Ver cambios**: diferencias línea a línea de cada archivo que modificó la respuesta.
 - **Revertir archivos de esta respuesta**: restaura los archivos al estado anterior a tu mensaje
   usando los checkpoints del SDK.
+- **Imágenes adjuntas** (PNG, JPG, GIF, WebP de hasta 5 MB) se envían como imágenes reales al
+  modelo, no como rutas.
 
 ### Sistema
 - **Notificaciones** del sistema al terminar una respuesta si la app no está delante.
@@ -186,7 +195,9 @@ cada día a una hora, o un día de la semana. Cada ejecución:
 - corre como una consulta de un solo turno en la carpeta de trabajo, con el modelo y permisos
   configurados;
 - añade el resultado a `<carpeta>/.claude/programadas/<id>.md`;
-- muestra una notificación del sistema.
+- si la tarea define un **esquema JSON**, el resultado se devuelve estructurado (salida con esquema
+  del SDK) y se acumula además en `<id>.jsonl`, una línea por ejecución, listo para tablas;
+- muestra una notificación del sistema. Una ejecución en curso se puede **cancelar**.
 
 Las tareas solo se ejecutan mientras la app está abierta. Si estuvo cerrada, la tarea pendiente se
 ejecuta una sola vez al volver y se recalcula la siguiente.
@@ -196,13 +207,19 @@ ejecuta una sola vez al volver y se recalcula la siguiente.
 Servidores MCP listos para activar con un interruptor, sin claves ni configuración. Se descargan
 con `npx` la primera vez:
 
-| Conexión | Qué aporta |
-|---|---|
-| Navegador web | Abrir páginas, leer contenido y hacer clics (Playwright). |
-| Grafo de conocimiento | Memoria estructurada de entidades y relaciones. |
-| Razonamiento paso a paso | Descomposición de problemas complejos. |
+| Conexión | Qué aporta | Credencial |
+|---|---|---|
+| Navegador web | Abrir páginas, leer contenido y hacer clics (Playwright). | No |
+| Grafo de conocimiento | Memoria estructurada de entidades y relaciones. | No |
+| Razonamiento paso a paso | Descomposición de problemas complejos. | No |
+| GitHub | Repositorios, issues y pull requests (servidor remoto oficial). | Token personal |
+| Notion | Páginas y bases de datos. | Token de integración |
+| Slack | Canales y mensajes. | Bot token y Team ID |
+| Búsqueda Brave | Búsqueda web alternativa con API. | API key |
 
-Para añadir otra, edita `CONNECTIONS` en `src/main/config.js` con el paquete npm del servidor.
+Las credenciales se guardan cifradas con el almacén del sistema (`safeStorage` de Electron) y
+nunca llegan a la interfaz. Cada conexión muestra su estado real: conectada, con error, requiere
+autenticación o conectando. Para añadir otra, edita `CONNECTIONS` en `src/main/config.js`.
 
 ## Configuración
 
@@ -255,6 +272,8 @@ renderer/
   files.js               Chips de archivos producidos y panel de vista previa
   schedules.js           Sección de tareas programadas
 docs/ARQUITECTURA.md     Contratos IPC y eventos entre main y renderer
+docs/EMPAQUETADO.md      Instalador, icono, actualizaciones
+build/                   icon.png / icon.svg
 test/                    ui.js (prueba real sobre Electron), scheduler.test.js, demos
 ```
 
@@ -274,19 +293,16 @@ Ideas que encajan en la arquitectura actual con poco código:
   en `dialogs.js`.
 - **Subagentes especializados**: opción `agents` del SDK en `buildOptions`.
 - **Hooks** (registro, bloqueo de rutas): opción `hooks` del SDK en `buildOptions`.
-- **Salida estructurada** (JSON con esquema): opción `outputFormat` en `runOnce` para tareas
-  programadas.
-- **Instalador**: `electron-builder` sobre `package.json`; no hay nada que compilar antes.
 
-Lo que no está y sería un cambio mayor: conexiones con OAuth (GitHub, Google Drive), ejecución
+Lo que no está y sería un cambio mayor: conexiones con OAuth interactivo (Google Drive), ejecución
 remota, y sincronización de memoria entre equipos.
 
 ## Pruebas
 
 ```bash
 npm test                     # abre el Electron real y pulsa cada control; ~30 comprobaciones; sin tokens
-UI_TEST_LIVE=1 npm test      # además, con Haiku: permiso interactivo, archivo creado, revertir,
-                             # sugerencia, historial y reanudar sesión (unos centavos)
+UI_TEST_LIVE=1 npm test      # además, con Haiku: permiso interactivo, archivo creado, ver cambios,
+                             # revertir, sugerencia, historial y reanudar sesión (unos centavos)
 node test/scheduler.test.js  # planificador
 ```
 

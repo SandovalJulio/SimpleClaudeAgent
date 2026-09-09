@@ -5,17 +5,78 @@
   "main": "main.js",
   "scripts": {
     "start": "electron .",
-    "test": "node test/ui.js"
+    "test": "node test/ui.js",
+    "dist": "electron-builder --win --publish never",
+    "dist:mac": "electron-builder --mac --publish never",
+    "dist:linux": "electron-builder --linux --publish never"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "latest",
+    "diff": "^9.0.0",
+    "electron-updater": "^6.8.9",
     "marked": "^18.0.12"
   },
   "devDependencies": {
     "electron": "latest",
+    "electron-builder": "^26.15.3",
     "playwright-core": "^1.63.0"
   },
   "description": "Agente de escritorio sobre el Claude Agent SDK: skills, memoria, artifacts y tareas programadas.",
   "license": "MIT",
-  "author": "Julio Sandoval"
+  "author": "Julio Sandoval",
+  "build": {
+    "appId": "mx.derevo.agente",
+    "productName": "Agente",
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/@anthropic-ai/**"
+    ],
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**",
+      "renderer/**",
+      "node_modules/**",
+      "package.json",
+      "!test/**",
+      "!docs/**",
+      "!build/**",
+      "!.env"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.png",
+      "signExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "icon": "build/icon.png",
+      "category": "public.app-category.developer-tools"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "icon": "build/icon.png",
+      "category": "Development"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "tu-usuario",
+      "repo": "agente"
+    }
+  }
 }
